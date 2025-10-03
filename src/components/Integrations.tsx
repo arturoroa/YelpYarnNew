@@ -4,6 +4,12 @@ import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
 
+interface Toast {
+  id: number;
+  message: string;
+  type: 'success' | 'error' | 'info';
+}
+
 interface Integration {
   id: string;
   name: string;
@@ -28,12 +34,21 @@ interface Integration {
 
 export default function Integrations() {
   const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [toasts, setToasts] = useState<Toast[]>([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newIntegration, setNewIntegration] = useState<Partial<Integration>>({
     type: 'database',
     config: {}
   });
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
 
   useEffect(() => {
     fetchIntegrations();
@@ -146,9 +161,10 @@ export default function Integrations() {
       await fetchIntegrations();
       setNewIntegration({ type: 'database', config: {} });
       setShowAddForm(false);
+      showToast('Integration created successfully', 'success');
     } catch (error) {
       console.error('Error creating integration:', error);
-      alert('Failed to create integration');
+      showToast('Failed to create integration', 'error');
     }
   };
 
@@ -163,9 +179,10 @@ export default function Integrations() {
       if (!response.ok) throw new Error('Failed to delete integration');
 
       setIntegrations(prev => prev.filter(int => int.id !== id));
+      showToast('Integration deleted successfully', 'success');
     } catch (error) {
       console.error('Error deleting integration:', error);
-      alert('Failed to delete integration');
+      showToast('Failed to delete integration', 'error');
     }
   };
 
@@ -216,9 +233,10 @@ export default function Integrations() {
         } : i))
       );
       cancelEdit();
+      showToast('Integration updated successfully', 'success');
     } catch (error) {
       console.error('Error updating integration:', error);
-      alert('Failed to update integration');
+      showToast('Failed to update integration', 'error');
     }
   };
 
@@ -246,9 +264,10 @@ export default function Integrations() {
       setIntegrations(prev =>
         prev.map(i => (i.id === id ? { ...i, status: next } : i))
       );
+      showToast(`Integration ${next === 'connected' ? 'connected' : 'disconnected'}`, 'info');
     } catch (error) {
       console.error('Error updating status:', error);
-      alert('Failed to update status');
+      showToast('Failed to update status', 'error');
     }
   };
 
@@ -294,9 +313,9 @@ export default function Integrations() {
       );
 
       if (result.success) {
-        alert('Connection successful');
+        showToast('Connection successful', 'success');
       } else {
-        alert(`Connection failed: ${result.error}`);
+        showToast(`Connection failed: ${result.error}`, 'error');
       }
     } catch (error) {
       const errorStatus = 'error';
@@ -318,7 +337,7 @@ export default function Integrations() {
             : i
         )
       );
-      alert(`Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
+      showToast(`Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     } finally {
       setBusyFor(id, false);
     }
@@ -762,6 +781,21 @@ export default function Integrations() {
           </div>
         </div>
       )}
+
+      <div className="fixed bottom-4 right-4 z-50 space-y-2">
+        {toasts.map((toast) => (
+          <div
+            key={toast.id}
+            className={`px-4 py-3 rounded-lg shadow-lg text-white min-w-[300px] animate-slide-in ${
+              toast.type === 'success' ? 'bg-green-500' :
+              toast.type === 'error' ? 'bg-red-500' :
+              'bg-blue-500'
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }
