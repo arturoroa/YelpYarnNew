@@ -333,13 +333,17 @@ export default function Integrations() {
         showToast(result.error || 'Connection failed', 'error');
       }
     } catch (error) {
+      console.error('Test connection error:', error);
       const errorStatus: IntegrationStatus = 'error';
 
-      await supabase
-        .from('integrations')
-        .update({ status: errorStatus })
-        .eq('id', id)
-        .catch(() => {});
+      try {
+        await supabase
+          .from('integrations')
+          .update({ status: errorStatus })
+          .eq('id', id);
+      } catch (dbError) {
+        console.error('Failed to update status:', dbError);
+      }
 
       setIntegrations(prev =>
         prev.map(i =>
