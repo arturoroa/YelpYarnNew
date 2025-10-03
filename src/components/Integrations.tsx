@@ -276,10 +276,16 @@ export default function Integrations() {
   };
 
   const testConnection = async (id: string) => {
+    console.log('Testing connection for:', id);
     setBusyFor(id, true);
     try {
       const target = integrations.find(i => i.id === id);
-      if (!target) return;
+      if (!target) {
+        console.log('Integration not found:', id);
+        return;
+      }
+
+      console.log('Testing connection to:', target.type, target.config);
 
       // Try backend API for real connection testing
       const response = await fetch('/api/integrations/test-connection', {
@@ -554,6 +560,7 @@ export default function Integrations() {
   const actionsFor = (integration: Integration) => {
     const busyNow = !!busy[integration.id];
     const editing = isEditing(integration.id);
+    console.log('Rendering actions for:', integration.id, { busyNow, editing });
     return (
       <div className="flex items-center gap-2">
         {getStatusIcon(integration.status)}
@@ -572,7 +579,11 @@ export default function Integrations() {
           onClick={() => testConnection(integration.id)}
           disabled={busyNow || editing}
           title="Test connection"
-          className={`p-1 rounded ${editing ? 'opacity-40 cursor-not-allowed' : 'hover:bg-black/5'}`}
+          className={`p-1 rounded transition-colors ${
+            busyNow || editing
+              ? 'opacity-40 cursor-not-allowed'
+              : 'hover:bg-blue-50 hover:text-blue-600 cursor-pointer'
+          }`}
           aria-label="Test connection"
         >
           <RefreshCw className={`w-4 h-4 ${busyNow ? 'animate-spin' : ''}`} />
