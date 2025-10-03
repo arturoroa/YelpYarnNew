@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
@@ -35,7 +35,7 @@ export default function Integrations() {
     config: {}
   });
 
-  useMemo(() => {
+  useEffect(() => {
     fetchIntegrations();
   }, []);
 
