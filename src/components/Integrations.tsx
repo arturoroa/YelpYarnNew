@@ -69,6 +69,7 @@ export default function Integrations() {
       })));
     } catch (error) {
       console.error('Error fetching integrations:', error);
+      showToast('Failed to fetch integrations', 'error');
     }
   };
 

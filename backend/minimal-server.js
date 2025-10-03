@@ -3,6 +3,8 @@ import cors from 'cors';
 import puppeteer from 'puppeteer';
 import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
+import pg from 'pg';
+import mysql from 'mysql2/promise.js';
 
 dotenv.config();
 
@@ -151,10 +153,12 @@ app.post('/api/integrations/test-connection', async (req, res) => {
     }
   } catch (error) {
     console.error('Connection test error:', error);
-    return res.status(500).json({
-      success: false,
-      error: error.message || 'Internal server error'
-    });
+    if (!res.headersSent) {
+      return res.status(500).json({
+        success: false,
+        error: error.message || 'Internal server error'
+      });
+    }
   }
 });
 
@@ -173,8 +177,7 @@ async function testDatabaseConnection(config, res) {
 
   try {
     if (dbProtocol.includes('postgres') || dbProtocol === 'postgresql') {
-      const pg = await import('pg');
-      const { Client } = pg.default;
+      const { Client } = pg;
 
       const client = new Client({
         host,
@@ -216,10 +219,8 @@ async function testDatabaseConnection(config, res) {
         });
       }
     } else if (dbProtocol.includes('mysql')) {
-      const mysql = await import('mysql2/promise');
-
       try {
-        const connection = await mysql.default.createConnection({
+        const connection = await mysql.createConnection({
           host,
           port: actualPort,
           database: database || 'mysql',
@@ -261,10 +262,13 @@ async function testDatabaseConnection(config, res) {
       });
     }
   } catch (err) {
-    return res.json({
-      success: false,
-      error: `Error testing connection: ${err.message}`
-    });
+    console.error('Database connection test error:', err);
+    if (!res.headersSent) {
+      return res.json({
+        success: false,
+        error: `Error testing connection: ${err.message}`
+      });
+    }
   }
 }
 
