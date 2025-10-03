@@ -27,57 +27,36 @@ interface Integration {
 }
 
 export default function Integrations() {
-  const [integrations, setIntegrations] = useState<Integration[]>([
-    {
-      id: '1',
-      name: 'Test Database',
-      type: 'database',
-      status: 'connected',
-      lastSync: '2 minutes ago',
-      config: {
-        host: 'localhost',
-        port: 5432,
-        database: 'yelp_test',
-        username: 'test_user',
-        protocol: 'postgresql',
-        ssl: true,
-        maxConnections: 10,
-        timeout: 30
-      }
-    },
-    {
-      id: '2',
-      name: 'US West Proxy',
-      type: 'proxy',
-      status: 'connected',
-      lastSync: '5 minutes ago',
-      config: {
-        host: 'proxy.example.com',
-        port: 8080,
-        protocol: 'http',
-        country: 'United States',
-        region: 'California',
-        city: 'San Francisco'
-      }
-    },
-    {
-      id: '3',
-      name: 'Corporate VPN',
-      type: 'vpn',
-      status: 'disconnected',
-      config: {
-        host: 'vpn.company.com',
-        protocol: 'openvpn',
-        username: 'bot_user'
-      }
-    }
-  ]);
+  const [integrations, setIntegrations] = useState<Integration[]>([]);
 
   const [showAddForm, setShowAddForm] = useState(false);
   const [newIntegration, setNewIntegration] = useState<Partial<Integration>>({
     type: 'database',
     config: {}
   });
+
+  useMemo(() => {
+    fetchIntegrations();
+  }, []);
+
+  const fetchIntegrations = async () => {
+    try {
+      const response = await fetch('/api/integrations');
+      if (!response.ok) throw new Error('Failed to fetch integrations');
+      const data = await response.json();
+      setIntegrations(data.map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        status: item.status,
+        lastSync: item.last_sync,
+        config: item.config
+      })));
+    } catch (error) {
+      console.error('Error fetching integrations:', error);
+      alert('Failed to load integrations');
+    }
+  };
 
   // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null);
@@ -144,7 +123,7 @@ export default function Integrations() {
     );
   };
 
-  const handleAddIntegration = () => {
+  const handleAddIntegration = async () => {
     const name = (newIntegration.name || '').trim();
     const type = newIntegration.type as IntegrationType | undefined;
     if (!name || !type) return;
@@ -152,20 +131,45 @@ export default function Integrations() {
     const cfg = { ...(newIntegration.config || {}) };
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
-    const integration: Integration = {
-      id: Date.now().toString(),
-      name,
-      type,
-      status: 'disconnected',
-      config: cfg
-    };
-    setIntegrations(prev => [...prev, integration]);
-    setNewIntegration({ type: 'database', config: {} });
-    setShowAddForm(false);
+    try {
+      const response = await fetch('/api/integrations', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          type,
+          config: cfg
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to create integration');
+
+      await fetchIntegrations();
+      setNewIntegration({ type: 'database', config: {} });
+      setShowAddForm(false);
+    } catch (error) {
+      console.error('Error creating integration:', error);
+      alert('Failed to create integration');
+    }
   };
 
-  const handleDeleteIntegration = (id: string) => {
-    setIntegrations(prev => prev.filter(int => int.id !== id));
+  const handleDeleteIntegration = async (id: string) => {
+    if (!confirm('Are you sure you want to delete this integration?')) return;
+
+    try {
+      const response = await fetch(`/api/integrations/${id}`, {
+        method: 'DELETE'
+      });
+
+      if (!response.ok) throw new Error('Failed to delete integration');
+
+      setIntegrations(prev => prev.filter(int => int.id !== id));
+    } catch (error) {
+      console.error('Error deleting integration:', error);
+      alert('Failed to delete integration');
+    }
   };
 
   // === Inline Edit ===
@@ -179,34 +183,78 @@ export default function Integrations() {
     setDraft(null);
   };
 
-  const saveEdit = () => {
+  const saveEdit = async () => {
     if (!editingId || !draft) return;
 
     const name = (draft.name || '').trim();
     const type = draft.type as IntegrationType | undefined;
     if (!name || !type) return;
 
-    // sanitize numeric fields
     const cfg = { ...(draft.config || {}) };
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
-    setIntegrations(prev =>
-      prev.map(i => (i.id === editingId ? { ...i, name, type, config: cfg } : i))
-    );
-    cancelEdit();
+    try {
+      const response = await fetch(`/api/integrations/${editingId}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          name,
+          type,
+          config: cfg
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to update integration');
+
+      const updated = await response.json();
+      setIntegrations(prev =>
+        prev.map(i => (i.id === editingId ? {
+          id: updated.id,
+          name: updated.name,
+          type: updated.type,
+          status: updated.status,
+          lastSync: updated.last_sync,
+          config: updated.config
+        } : i))
+      );
+      cancelEdit();
+    } catch (error) {
+      console.error('Error updating integration:', error);
+      alert('Failed to update integration');
+    }
   };
 
   // === Status Toggle ===
-  const toggleStatus = (id: string) => {
-    setIntegrations(prev =>
-      prev.map(i => {
-        if (i.id !== id) return i;
-        const next: IntegrationStatus =
-          i.status === 'connected' ? 'disconnected' :
-          i.status === 'disconnected' ? 'connected' : 'disconnected';
-        return { ...i, status: next };
-      })
-    );
+  const toggleStatus = async (id: string) => {
+    const integration = integrations.find(i => i.id === id);
+    if (!integration) return;
+
+    const next: IntegrationStatus =
+      integration.status === 'connected' ? 'disconnected' :
+      integration.status === 'disconnected' ? 'connected' : 'disconnected';
+
+    try {
+      const response = await fetch(`/api/integrations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: next
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to update status');
+
+      setIntegrations(prev =>
+        prev.map(i => (i.id === id ? { ...i, status: next } : i))
+      );
+    } catch (error) {
+      console.error('Error updating status:', error);
+      alert('Failed to update status');
+    }
   };
 
   // === Test Connection ===
@@ -229,30 +277,50 @@ export default function Integrations() {
 
       const result = await response.json();
 
-      if (result.success) {
-        setIntegrations(prev =>
-          prev.map(i =>
-            i.id === id
-              ? { ...i, status: 'connected', lastSync: 'just now' }
-              : i
-          )
-        );
-        alert('Connection successful');
-      } else {
-        setIntegrations(prev =>
-          prev.map(i =>
-            i.id === id
-              ? { ...i, status: 'error' }
-              : i
-          )
-        );
-        alert(`Connection failed: ${result.error}`);
-      }
-    } catch (error) {
+      const newStatus = result.success ? 'connected' : 'error';
+      const lastSync = result.success ? 'just now' : undefined;
+
+      await fetch(`/api/integrations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: newStatus,
+          last_sync: lastSync
+        })
+      });
+
       setIntegrations(prev =>
         prev.map(i =>
           i.id === id
-            ? { ...i, status: 'error' }
+            ? { ...i, status: newStatus, lastSync }
+            : i
+        )
+      );
+
+      if (result.success) {
+        alert('Connection successful');
+      } else {
+        alert(`Connection failed: ${result.error}`);
+      }
+    } catch (error) {
+      const errorStatus = 'error';
+
+      await fetch(`/api/integrations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          status: errorStatus
+        })
+      }).catch(() => {});
+
+      setIntegrations(prev =>
+        prev.map(i =>
+          i.id === id
+            ? { ...i, status: errorStatus }
             : i
         )
       );

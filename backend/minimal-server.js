@@ -1,6 +1,15 @@
 import express from 'express';
 import cors from 'cors';
 import puppeteer from 'puppeteer';
+import { createClient } from '@supabase/supabase-js';
+import dotenv from 'dotenv';
+
+dotenv.config();
+
+const supabase = createClient(
+  process.env.VITE_SUPABASE_URL,
+  process.env.VITE_SUPABASE_ANON_KEY
+);
 
 // Crear aplicación Express
 const app = express();
@@ -15,6 +24,96 @@ app.use(express.json({ limit: '10mb' }));
 // Ruta básica para verificar si el servidor está funcionando
 app.get('/api/status', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
+});
+
+// CRUD Endpoints for Integrations
+app.get('/api/integrations', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('integrations')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching integrations:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/integrations', async (req, res) => {
+  try {
+    const { name, type, config } = req.body;
+
+    if (!name || !type) {
+      return res.status(400).json({ error: 'Name and type are required' });
+    }
+
+    const { data, error } = await supabase
+      .from('integrations')
+      .insert([{
+        name,
+        type,
+        status: 'disconnected',
+        config: config || {}
+      }])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.status(201).json(data);
+  } catch (error) {
+    console.error('Error creating integration:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.put('/api/integrations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { name, type, config, status, last_sync } = req.body;
+
+    const updateData = {
+      updated_at: new Date().toISOString()
+    };
+
+    if (name !== undefined) updateData.name = name;
+    if (type !== undefined) updateData.type = type;
+    if (config !== undefined) updateData.config = config;
+    if (status !== undefined) updateData.status = status;
+    if (last_sync !== undefined) updateData.last_sync = last_sync;
+
+    const { data, error } = await supabase
+      .from('integrations')
+      .update(updateData)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    console.error('Error updating integration:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.delete('/api/integrations/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    const { error } = await supabase
+      .from('integrations')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting integration:', error);
+    res.status(500).json({ error: error.message });
+  }
 });
 
 // Endpoint para probar conexiones de integración
