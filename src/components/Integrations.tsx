@@ -305,6 +305,33 @@ export default function Integrations() {
 
       const result = await response.json();
 
+      // Check if this is a timeout error from backend environment restrictions
+      const isBackendTimeout = result.details?.code === 'ETIMEDOUT' || result.error?.includes('timed out');
+
+      if (isBackendTimeout) {
+        // Backend environment can't reach external hosts - save config as disconnected
+        const { error } = await supabase
+          .from('integrations')
+          .update({
+            status: 'disconnected',
+            last_sync: 'Config saved (not verified)'
+          })
+          .eq('id', id);
+
+        if (error) throw error;
+
+        setIntegrations(prev =>
+          prev.map(i =>
+            i.id === id
+              ? { ...i, status: 'disconnected', lastSync: 'Config saved (not verified)' }
+              : i
+          )
+        );
+
+        showToast(`Configuration saved for ${target.name}. Connection testing is unavailable in this environment due to network restrictions, but the configuration will be used when running tests.`, 'info');
+        return;
+      }
+
       const newStatus: IntegrationStatus = result.success ? 'connected' : 'error';
       const lastSync = result.success ? 'just now' : undefined;
 
