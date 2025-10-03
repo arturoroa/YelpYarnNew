@@ -592,6 +592,145 @@ app.post('/api/tests/execute-puppeteer', async (req, res) => {
 });
 
 // Iniciar el servidor
+// System Logs endpoint
+app.get('/api/logs/system/recent', async (req, res) => {
+  try {
+    const lines = parseInt(req.query.lines) || 100;
+    // Return mock logs for now - in production, this would read actual system logs
+    res.json([
+      {
+        timestamp: new Date().toISOString(),
+        level: 'info',
+        message: 'Server started successfully',
+        source: 'system'
+      }
+    ]);
+  } catch (error) {
+    console.error('Error fetching system logs:', error);
+    res.status(500).json({ error: 'Failed to fetch system logs' });
+  }
+});
+
+// Test session endpoints
+app.get('/api/tests/sessions', async (req, res) => {
+  try {
+    const { data, error } = await supabase
+      .from('test_sessions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    res.json(data || []);
+  } catch (error) {
+    console.error('Error fetching test sessions:', error);
+    res.status(500).json({ error: 'Failed to fetch test sessions' });
+  }
+});
+
+app.post('/api/tests/start', async (req, res) => {
+  try {
+    const sessionData = req.body;
+    const { data, error } = await supabase
+      .from('test_sessions')
+      .insert([sessionData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    console.error('Error starting test session:', error);
+    res.status(500).json({ error: 'Failed to start test session' });
+  }
+});
+
+app.get('/api/tests/session/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { data, error } = await supabase
+      .from('test_sessions')
+      .select('*')
+      .eq('session_id', sessionId)
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching test session:', error);
+    res.status(500).json({ error: 'Failed to fetch test session' });
+  }
+});
+
+app.post('/api/tests/stop/:sessionId', async (req, res) => {
+  try {
+    const { sessionId } = req.params;
+    const { data, error } = await supabase
+      .from('test_sessions')
+      .update({ status: 'stopped', ended_at: new Date().toISOString() })
+      .eq('session_id', sessionId)
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    console.error('Error stopping test session:', error);
+    res.status(500).json({ error: 'Failed to stop test session' });
+  }
+});
+
+// User endpoints
+app.get('/api/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const { data, error } = await supabase
+      .from('yelp_users')
+      .select('*')
+      .eq('id', userId)
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    console.error('Error fetching user:', error);
+    res.status(500).json({ error: 'Failed to fetch user' });
+  }
+});
+
+app.get('/api/users/check/:username', async (req, res) => {
+  try {
+    const { username } = req.params;
+    const { data, error } = await supabase
+      .from('yelp_users')
+      .select('*')
+      .eq('username', username)
+      .maybeSingle();
+
+    if (error) throw error;
+    res.json({ exists: !!data, user: data });
+  } catch (error) {
+    console.error('Error checking user:', error);
+    res.status(500).json({ error: 'Failed to check user' });
+  }
+});
+
+app.post('/api/users/create', async (req, res) => {
+  try {
+    const userData = req.body;
+    const { data, error } = await supabase
+      .from('yelp_users')
+      .insert([userData])
+      .select()
+      .single();
+
+    if (error) throw error;
+    res.json(data);
+  } catch (error) {
+    console.error('Error creating user:', error);
+    res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
 const PORT = 3001;
 const server = app.listen(PORT, () => {
   console.log(`Minimal server running on http://localhost:${PORT}`);
