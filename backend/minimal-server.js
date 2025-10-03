@@ -152,7 +152,7 @@ app.post('/api/integrations/test-connection', async (req, res) => {
 });
 
 async function testDatabaseConnection(config, res) {
-  const { host, port, database, username, password } = config;
+  const { host, port, database, username, password, protocol } = config;
 
   if (!host) {
     return res.json({
@@ -161,54 +161,104 @@ async function testDatabaseConnection(config, res) {
     });
   }
 
-  const net = await import('net');
+  const actualPort = port || 5432;
+  const dbProtocol = (protocol || 'postgresql').toLowerCase();
 
-  return new Promise((resolve) => {
-    const socket = new net.Socket();
-    const timeout = config.timeout || 5000;
-    const actualPort = port || 5432;
+  try {
+    if (dbProtocol.includes('postgres') || dbProtocol === 'postgresql') {
+      const pg = await import('pg');
+      const { Client } = pg.default;
 
-    socket.setTimeout(timeout);
-
-    socket.on('connect', () => {
-      socket.destroy();
-      res.json({
-        success: true,
-        message: `Successfully connected to ${host}:${actualPort}`
+      const client = new Client({
+        host,
+        port: actualPort,
+        database: database || 'postgres',
+        user: username || 'postgres',
+        password: password || '',
+        connectionTimeoutMillis: config.timeout || 5000,
       });
-      resolve();
-    });
 
-    socket.on('timeout', () => {
-      socket.destroy();
-      res.json({
-        success: false,
-        error: `Connection to ${host}:${actualPort} timed out after ${timeout}ms`
-      });
-      resolve();
-    });
+      try {
+        await client.connect();
+        await client.query('SELECT 1');
+        await client.end();
 
-    socket.on('error', (err) => {
-      socket.destroy();
-      let errorMsg = err.message;
-      if (err.code === 'ECONNREFUSED') {
-        errorMsg = `Connection refused to ${host}:${actualPort}. Database service may be down or unreachable.`;
-      } else if (err.code === 'ETIMEDOUT') {
-        errorMsg = `Connection to ${host}:${actualPort} timed out.`;
-      } else if (err.code === 'ENOTFOUND') {
-        errorMsg = `Host ${host} not found. Check hostname.`;
-      } else if (err.code === 'ENETUNREACH') {
-        errorMsg = `Network unreachable to ${host}:${actualPort}.`;
+        return res.json({
+          success: true,
+          message: `Successfully connected to PostgreSQL database at ${host}:${actualPort}/${database || 'postgres'}`
+        });
+      } catch (err) {
+        try { await client.end(); } catch {}
+
+        let errorMsg = err.message;
+        if (err.code === '28P01') {
+          errorMsg = `Authentication failed for user "${username}". Check username and password.`;
+        } else if (err.code === '3D000') {
+          errorMsg = `Database "${database}" does not exist.`;
+        } else if (err.code === 'ECONNREFUSED') {
+          errorMsg = `Connection refused to ${host}:${actualPort}. PostgreSQL service may be down.`;
+        } else if (err.code === 'ETIMEDOUT') {
+          errorMsg = `Connection to ${host}:${actualPort} timed out.`;
+        } else if (err.code === 'ENOTFOUND') {
+          errorMsg = `Host ${host} not found. Check hostname.`;
+        }
+
+        return res.json({
+          success: false,
+          error: errorMsg
+        });
       }
-      res.json({
-        success: false,
-        error: errorMsg
-      });
-      resolve();
-    });
+    } else if (dbProtocol.includes('mysql')) {
+      const mysql = await import('mysql2/promise');
 
-    socket.connect(actualPort, host);
-  });
+      try {
+        const connection = await mysql.default.createConnection({
+          host,
+          port: actualPort,
+          database: database || 'mysql',
+          user: username || 'root',
+          password: password || '',
+          connectTimeout: config.timeout || 5000,
+        });
+
+        await connection.query('SELECT 1');
+        await connection.end();
+
+        return res.json({
+          success: true,
+          message: `Successfully connected to MySQL database at ${host}:${actualPort}/${database || 'mysql'}`
+        });
+      } catch (err) {
+        let errorMsg = err.message;
+        if (err.code === 'ER_ACCESS_DENIED_ERROR') {
+          errorMsg = `Authentication failed for user "${username}". Check username and password.`;
+        } else if (err.code === 'ER_BAD_DB_ERROR') {
+          errorMsg = `Database "${database}" does not exist.`;
+        } else if (err.code === 'ECONNREFUSED') {
+          errorMsg = `Connection refused to ${host}:${actualPort}. MySQL service may be down.`;
+        } else if (err.code === 'ETIMEDOUT') {
+          errorMsg = `Connection to ${host}:${actualPort} timed out.`;
+        } else if (err.code === 'ENOTFOUND') {
+          errorMsg = `Host ${host} not found. Check hostname.`;
+        }
+
+        return res.json({
+          success: false,
+          error: errorMsg
+        });
+      }
+    } else {
+      return res.json({
+        success: false,
+        error: `Unsupported database protocol: ${dbProtocol}. Supported: postgresql, mysql`
+      });
+    }
+  } catch (err) {
+    return res.json({
+      success: false,
+      error: `Error testing connection: ${err.message}`
+    });
+  }
 }
 
 async function testProxyConnection(config, res) {

@@ -453,6 +453,22 @@ export default function Integrations() {
         {(draft.type === 'database') && (
           <>
             <div>
+              <label className="block text-gray-700 mb-1">Protocol</label>
+              <select
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                value={cfg.protocol || 'postgresql'}
+                onChange={(e) =>
+                  setDraft(prev => ({
+                    ...(prev as any),
+                    config: { ...(cfg as any), protocol: e.target.value }
+                  }))
+                }
+              >
+                <option value="postgresql">PostgreSQL</option>
+                <option value="mysql">MySQL</option>
+              </select>
+            </div>
+            <div>
               <label className="block text-gray-700 mb-1">Database</label>
               <input
                 className="w-full border border-gray-300 rounded-md px-3 py-2"
@@ -700,6 +716,22 @@ export default function Integrations() {
 
               {newIntegration.type === 'database' && (
                 <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Protocol</label>
+                    <select
+                      value={newIntegration.config?.protocol || 'postgresql'}
+                      onChange={(e) =>
+                        setNewIntegration(prev => ({
+                          ...prev,
+                          config: { ...(prev.config || {}), protocol: e.target.value }
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    >
+                      <option value="postgresql">PostgreSQL</option>
+                      <option value="mysql">MySQL</option>
+                    </select>
+                  </div>
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
                     <input
