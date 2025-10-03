@@ -1,5 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
+import {
+  Database, Server, Key, Shield, Plus, Trash2, CheckCircle, XCircle,
+  Pencil, Save, X, RefreshCw, Power
+} from 'lucide-react';
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -54,15 +57,12 @@ export default function Integrations() {
       })));
     } catch (error) {
       console.error('Error fetching integrations:', error);
-      alert('Failed to load integrations');
     }
   };
 
-  // Inline edit state
   const [editingId, setEditingId] = useState<string | null>(null);
   const [draft, setDraft] = useState<Partial<Integration> | null>(null);
 
-  // Action in-flight state (per-card)
   const [busy, setBusy] = useState<Record<string, boolean>>({});
   const setBusyFor = (id: string, val: boolean) =>
     setBusy(prev => ({ ...prev, [id]: val }));
@@ -95,7 +95,7 @@ export default function Integrations() {
     switch (type) {
       case 'database': return 'border-green-200 bg-green-50';
       case 'proxy': return 'border-purple-200 bg-purple-50';
-      case 'vpn': return 'border-indigo-200 bg-indigo-50';
+      case 'vpn': return 'border-blue-200 bg-blue-50';
       default: return 'border-gray-200 bg-gray-50';
     }
   };
@@ -172,10 +172,9 @@ export default function Integrations() {
     }
   };
 
-  // === Inline Edit ===
   const startEdit = (intg: Integration) => {
     setEditingId(intg.id);
-    setDraft(JSON.parse(JSON.stringify(intg))); // deep clone (small object)
+    setDraft(JSON.parse(JSON.stringify(intg)));
   };
 
   const cancelEdit = () => {
@@ -226,7 +225,6 @@ export default function Integrations() {
     }
   };
 
-  // === Status Toggle ===
   const toggleStatus = async (id: string) => {
     const integration = integrations.find(i => i.id === id);
     if (!integration) return;
@@ -257,7 +255,6 @@ export default function Integrations() {
     }
   };
 
-  // === Test Connection ===
   const testConnection = async (id: string) => {
     setBusyFor(id, true);
     try {
@@ -522,10 +519,8 @@ export default function Integrations() {
     const editing = isEditing(integration.id);
     return (
       <div className="flex items-center gap-2">
-        {/* Status icon */}
         {getStatusIcon(integration.status)}
 
-        {/* Toggle Status */}
         <button
           onClick={() => toggleStatus(integration.id)}
           disabled={busyNow || editing}
@@ -536,7 +531,6 @@ export default function Integrations() {
           <Power className="w-4 h-4" />
         </button>
 
-        {/* Test Connection */}
         <button
           onClick={() => testConnection(integration.id)}
           disabled={busyNow || editing}
@@ -547,7 +541,6 @@ export default function Integrations() {
           <RefreshCw className={`w-4 h-4 ${busyNow ? 'animate-spin' : ''}`} />
         </button>
 
-        {/* Edit / Save / Cancel */}
         {!editing ? (
           <button
             onClick={() => startEdit(integration)}
@@ -578,7 +571,6 @@ export default function Integrations() {
           </>
         )}
 
-        {/* Delete */}
         <button
           onClick={() => handleDeleteIntegration(integration.id)}
           className="p-1 rounded text-red-600 hover:bg-red-50"
@@ -593,7 +585,6 @@ export default function Integrations() {
 
   return (
     <div className="p-6">
-      {/* Header */}
       <div className="flex justify-between items-center mb-6">
         <div>
           <h1 className="text-2xl font-bold text-gray-900">Integrations</h1>
@@ -608,7 +599,6 @@ export default function Integrations() {
         </button>
       </div>
 
-      {/* Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
         {integrations.map((integration) => (
           <div key={integration.id} className={`border rounded-lg p-4 ${getCardColor(integration.type)}`}>
@@ -625,7 +615,6 @@ export default function Integrations() {
         ))}
       </div>
 
-      {/* Add Integration Modal */}
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
