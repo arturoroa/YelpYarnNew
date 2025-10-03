@@ -17,6 +17,196 @@ app.get('/api/status', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Endpoint para probar conexiones de integración
+app.post('/api/integrations/test-connection', async (req, res) => {
+  console.log('Testing connection for integration:', req.body.type);
+  const { type, config } = req.body;
+
+  if (!type || !config) {
+    return res.status(400).json({
+      success: false,
+      error: 'Missing type or config'
+    });
+  }
+
+  try {
+    switch (type) {
+      case 'database':
+        return await testDatabaseConnection(config, res);
+      case 'proxy':
+        return await testProxyConnection(config, res);
+      case 'vpn':
+        return await testVpnConnection(config, res);
+      default:
+        return res.status(400).json({
+          success: false,
+          error: `Unknown integration type: ${type}`
+        });
+    }
+  } catch (error) {
+    console.error('Connection test error:', error);
+    return res.status(500).json({
+      success: false,
+      error: error.message || 'Internal server error'
+    });
+  }
+});
+
+async function testDatabaseConnection(config, res) {
+  const { host, port, database, username, password } = config;
+
+  if (!host) {
+    return res.json({
+      success: false,
+      error: 'Host is required'
+    });
+  }
+
+  const net = await import('net');
+
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const timeout = config.timeout || 5000;
+
+    socket.setTimeout(timeout);
+
+    socket.on('connect', () => {
+      socket.destroy();
+      res.json({
+        success: true,
+        message: 'Connection successful'
+      });
+      resolve();
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      res.json({
+        success: false,
+        error: `Connection timeout after ${timeout}ms`
+      });
+      resolve();
+    });
+
+    socket.on('error', (err) => {
+      socket.destroy();
+      res.json({
+        success: false,
+        error: `Connection failed: ${err.message}`
+      });
+      resolve();
+    });
+
+    socket.connect(port || 5432, host);
+  });
+}
+
+async function testProxyConnection(config, res) {
+  const { host, port, protocol } = config;
+
+  if (!host) {
+    return res.json({
+      success: false,
+      error: 'Host is required'
+    });
+  }
+
+  const net = await import('net');
+
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const timeout = 5000;
+
+    socket.setTimeout(timeout);
+
+    socket.on('connect', () => {
+      socket.destroy();
+      res.json({
+        success: true,
+        message: 'Connection successful'
+      });
+      resolve();
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      res.json({
+        success: false,
+        error: `Connection timeout after ${timeout}ms`
+      });
+      resolve();
+    });
+
+    socket.on('error', (err) => {
+      socket.destroy();
+      res.json({
+        success: false,
+        error: `Connection failed: ${err.message}`
+      });
+      resolve();
+    });
+
+    socket.connect(port || 8080, host);
+  });
+}
+
+async function testVpnConnection(config, res) {
+  const { host, protocol } = config;
+
+  if (!host) {
+    return res.json({
+      success: false,
+      error: 'Host is required'
+    });
+  }
+
+  if (!protocol) {
+    return res.json({
+      success: false,
+      error: 'Protocol is required for VPN connections'
+    });
+  }
+
+  const net = await import('net');
+
+  return new Promise((resolve) => {
+    const socket = new net.Socket();
+    const timeout = 5000;
+    const port = protocol.toLowerCase() === 'openvpn' ? 1194 : 51820;
+
+    socket.setTimeout(timeout);
+
+    socket.on('connect', () => {
+      socket.destroy();
+      res.json({
+        success: true,
+        message: 'Connection successful'
+      });
+      resolve();
+    });
+
+    socket.on('timeout', () => {
+      socket.destroy();
+      res.json({
+        success: false,
+        error: `Connection timeout after ${timeout}ms`
+      });
+      resolve();
+    });
+
+    socket.on('error', (err) => {
+      socket.destroy();
+      res.json({
+        success: false,
+        error: `Connection failed: ${err.message}`
+      });
+      resolve();
+    });
+
+    socket.connect(port, host);
+  });
+}
+
 // Endpoint principal para ejecutar código Puppeteer
 app.post('/api/tests/execute-puppeteer', async (req, res) => {
   console.log('Received execute-puppeteer request');

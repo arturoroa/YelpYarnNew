@@ -1,8 +1,5 @@
 import React, { useMemo, useState } from 'react';
-import {
-  Database, Server, Key, Shield, Plus, Trash2, CheckCircle, XCircle,
-  Pencil, Save, X, RefreshCw, Power
-} from 'lucide-react';
+import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -212,21 +209,54 @@ export default function Integrations() {
     );
   };
 
-  // === Test Connection (mock async) ===
+  // === Test Connection ===
   const testConnection = async (id: string) => {
     setBusyFor(id, true);
     try {
-      // simulate latency + simple rule-based "result"
-      await new Promise(res => setTimeout(res, 650));
       const target = integrations.find(i => i.id === id);
-      const ok = Boolean(target?.config.host) && (target?.type !== 'vpn' || Boolean(target?.config.protocol));
+      if (!target) return;
+
+      const response = await fetch('/api/integrations/test-connection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: target.type,
+          config: target.config
+        })
+      });
+
+      const result = await response.json();
+
+      if (result.success) {
+        setIntegrations(prev =>
+          prev.map(i =>
+            i.id === id
+              ? { ...i, status: 'connected', lastSync: 'just now' }
+              : i
+          )
+        );
+        alert('Connection successful');
+      } else {
+        setIntegrations(prev =>
+          prev.map(i =>
+            i.id === id
+              ? { ...i, status: 'error' }
+              : i
+          )
+        );
+        alert(`Connection failed: ${result.error}`);
+      }
+    } catch (error) {
       setIntegrations(prev =>
         prev.map(i =>
           i.id === id
-            ? { ...i, status: ok ? 'connected' : 'error', lastSync: ok ? 'just now' : i.lastSync }
+            ? { ...i, status: 'error' }
             : i
         )
       );
+      alert(`Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`);
     } finally {
       setBusyFor(id, false);
     }
