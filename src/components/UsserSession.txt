@@ -1,0 +1,20 @@
+// Añade esto a tus interfaces
+interface TestRun {
+  testId: string;
+  name: string;
+  startTime: string;
+  endTime?: string;
+  status: 'running' | 'completed' | 'failed';
+}
+
+// Actualiza la interfaz UserSession
+interface UserSession {
+  id: string;
+  guv: string;
+  username: string;
+  startTime: string;
+  ipAddress: string;
+  endTime?: string;
+  active: boolean;
+  testsRun?: TestRun[]; // Nueva propiedad
+}

@@ -1,0 +1,683 @@
+import React, { useMemo, useState } from 'react';
+import {
+  Database, Server, Key, Shield, Plus, Trash2, CheckCircle, XCircle,
+  Pencil, Save, X, RefreshCw, Power
+} from 'lucide-react';
+
+type IntegrationType = 'database' | 'proxy' | 'vpn';
+type IntegrationStatus = 'connected' | 'disconnected' | 'error';
+
+interface Integration {
+  id: string;
+  name: string;
+  type: IntegrationType;
+  status: IntegrationStatus;
+  lastSync?: string;
+  config: {
+    host?: string;
+    port?: number;
+    database?: string;
+    username?: string;
+    password?: string;
+    protocol?: string;
+    country?: string;
+    region?: string;
+    city?: string;
+    ssl?: boolean;
+    maxConnections?: number;
+    timeout?: number;
+  };
+}
+
+export default function Integrations() {
+  const [integrations, setIntegrations] = useState<Integration[]>([
+    {
+      id: '1',
+      name: 'Test Database',
+      type: 'database',
+      status: 'connected',
+      lastSync: '2 minutes ago',
+      config: {
+        host: 'localhost',
+        port: 5432,
+        database: 'yelp_test',
+        username: 'test_user',
+        protocol: 'postgresql',
+        ssl: true,
+        maxConnections: 10,
+        timeout: 30
+      }
+    },
+    {
+      id: '2',
+      name: 'US West Proxy',
+      type: 'proxy',
+      status: 'connected',
+      lastSync: '5 minutes ago',
+      config: {
+        host: 'proxy.example.com',
+        port: 8080,
+        protocol: 'http',
+        country: 'United States',
+        region: 'California',
+        city: 'San Francisco'
+      }
+    },
+    {
+      id: '3',
+      name: 'Corporate VPN',
+      type: 'vpn',
+      status: 'disconnected',
+      config: {
+        host: 'vpn.company.com',
+        protocol: 'openvpn',
+        username: 'bot_user'
+      }
+    }
+  ]);
+
+  const [showAddForm, setShowAddForm] = useState(false);
+  const [newIntegration, setNewIntegration] = useState<Partial<Integration>>({
+    type: 'database',
+    config: {}
+  });
+
+  // Inline edit state
+  const [editingId, setEditingId] = useState<string | null>(null);
+  const [draft, setDraft] = useState<Partial<Integration> | null>(null);
+
+  // Action in-flight state (per-card)
+  const [busy, setBusy] = useState<Record<string, boolean>>({});
+  const setBusyFor = (id: string, val: boolean) =>
+    setBusy(prev => ({ ...prev, [id]: val }));
+
+  const parsePort = (value: string): number | undefined => {
+    if (value.trim() === '') return undefined;
+    const n = Number(value);
+    return Number.isFinite(n) && n >= 0 ? n : undefined;
+  };
+
+  const getIcon = (type: IntegrationType) => {
+    switch (type) {
+      case 'database': return <Database className="w-5 h-5" />;
+      case 'proxy': return <Shield className="w-5 h-5" />;
+      case 'vpn': return <Key className="w-5 h-5" />;
+      default: return <Server className="w-5 h-5" />;
+    }
+  };
+
+  const getStatusIcon = (status: IntegrationStatus) => {
+    switch (status) {
+      case 'connected': return <CheckCircle className="w-4 h-4 text-green-500" />;
+      case 'disconnected': return <XCircle className="w-4 h-4 text-gray-400" />;
+      case 'error': return <XCircle className="w-4 h-4 text-red-500" />;
+      default: return <XCircle className="w-4 h-4 text-gray-400" />;
+    }
+  };
+
+  const getCardColor = (type: IntegrationType) => {
+    switch (type) {
+      case 'database': return 'border-green-200 bg-green-50';
+      case 'proxy': return 'border-purple-200 bg-purple-50';
+      case 'vpn': return 'border-indigo-200 bg-indigo-50';
+      default: return 'border-gray-200 bg-gray-50';
+    }
+  };
+
+  const formatHost = (cfg: Integration['config']) => {
+    if (!cfg.host) return null;
+    const hasPort = typeof cfg.port === 'number' && Number.isFinite(cfg.port);
+    return (
+      <div className="flex justify-between">
+        <span>Host:</span>
+        <span className="font-mono">{cfg.host}{hasPort ? `:${cfg.port}` : ''}</span>
+      </div>
+    );
+  };
+
+  const formatLocation = (cfg: Integration['config']) => {
+    const { city, region, country } = cfg;
+    if (!city && !region && !country) return null;
+    const parts = [city, region, country].filter(Boolean).join(', ');
+    return (
+      <div className="flex justify-between">
+        <span>Location:</span>
+        <span>{parts}</span>
+      </div>
+    );
+  };
+
+  const handleAddIntegration = () => {
+    const name = (newIntegration.name || '').trim();
+    const type = newIntegration.type as IntegrationType | undefined;
+    if (!name || !type) return;
+
+    const cfg = { ...(newIntegration.config || {}) };
+    if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
+
+    const integration: Integration = {
+      id: Date.now().toString(),
+      name,
+      type,
+      status: 'disconnected',
+      config: cfg
+    };
+    setIntegrations(prev => [...prev, integration]);
+    setNewIntegration({ type: 'database', config: {} });
+    setShowAddForm(false);
+  };
+
+  const handleDeleteIntegration = (id: string) => {
+    setIntegrations(prev => prev.filter(int => int.id !== id));
+  };
+
+  // === Inline Edit ===
+  const startEdit = (intg: Integration) => {
+    setEditingId(intg.id);
+    setDraft(JSON.parse(JSON.stringify(intg))); // deep clone (small object)
+  };
+
+  const cancelEdit = () => {
+    setEditingId(null);
+    setDraft(null);
+  };
+
+  const saveEdit = () => {
+    if (!editingId || !draft) return;
+
+    const name = (draft.name || '').trim();
+    const type = draft.type as IntegrationType | undefined;
+    if (!name || !type) return;
+
+    // sanitize numeric fields
+    const cfg = { ...(draft.config || {}) };
+    if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
+
+    setIntegrations(prev =>
+      prev.map(i => (i.id === editingId ? { ...i, name, type, config: cfg } : i))
+    );
+    cancelEdit();
+  };
+
+  // === Status Toggle ===
+  const toggleStatus = (id: string) => {
+    setIntegrations(prev =>
+      prev.map(i => {
+        if (i.id !== id) return i;
+        const next: IntegrationStatus =
+          i.status === 'connected' ? 'disconnected' :
+          i.status === 'disconnected' ? 'connected' : 'disconnected';
+        return { ...i, status: next };
+      })
+    );
+  };
+
+  // === Test Connection (mock async) ===
+  const testConnection = async (id: string) => {
+    setBusyFor(id, true);
+    try {
+      // simulate latency + simple rule-based "result"
+      await new Promise(res => setTimeout(res, 650));
+      const target = integrations.find(i => i.id === id);
+      const ok = Boolean(target?.config.host) && (target?.type !== 'vpn' || Boolean(target?.config.protocol));
+      setIntegrations(prev =>
+        prev.map(i =>
+          i.id === id
+            ? { ...i, status: ok ? 'connected' : 'error', lastSync: ok ? 'just now' : i.lastSync }
+            : i
+        )
+      );
+    } finally {
+      setBusyFor(id, false);
+    }
+  };
+
+  const isEditing = (id: string) => editingId === id;
+
+  const renderViewFields = (integration: Integration) => (
+    <div className="space-y-2 text-sm text-gray-600">
+      <div className="flex justify-between">
+        <span>Type:</span>
+        <span className="capitalize font-medium">{integration.type}</span>
+      </div>
+
+      {formatHost(integration.config)}
+
+      {integration.config.database && (
+        <div className="flex justify-between">
+          <span>Database:</span>
+          <span className="font-mono">{integration.config.database}</span>
+        </div>
+      )}
+
+      {integration.config.username && (
+        <div className="flex justify-between">
+          <span>Username:</span>
+          <span className="font-mono">{integration.config.username}</span>
+        </div>
+      )}
+
+      {integration.config.protocol && (
+        <div className="flex justify-between">
+          <span>Protocol:</span>
+          <span className="uppercase font-medium">{integration.config.protocol}</span>
+        </div>
+      )}
+
+      {formatLocation(integration.config)}
+
+      {integration.config.ssl && (
+        <div className="flex justify-between">
+          <span>SSL:</span>
+          <span className="text-green-600 font-medium">Enabled</span>
+        </div>
+      )}
+
+      {integration.lastSync && (
+        <div className="flex justify-between">
+          <span>Last Sync:</span>
+          <span>{integration.lastSync}</span>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderEditFields = (id: string) => {
+    if (!draft) return null;
+    const cfg = draft.config || {};
+    return (
+      <div className="space-y-3 text-sm">
+        <div>
+          <label className="block text-gray-700 mb-1">Name</label>
+          <input
+            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            value={draft.name || ''}
+            onChange={(e) => setDraft(prev => ({ ...(prev as any), name: e.target.value }))}
+          />
+        </div>
+
+        <div>
+          <label className="block text-gray-700 mb-1">Type</label>
+          <select
+            className="w-full border border-gray-300 rounded-md px-3 py-2"
+            value={draft.type || 'database'}
+            onChange={(e) => setDraft(prev => ({ ...(prev as any), type: e.target.value as IntegrationType }))}
+          >
+            <option value="database">Database</option>
+            <option value="proxy">Proxy Server</option>
+            <option value="vpn">VPN Connection</option>
+          </select>
+        </div>
+
+        <div className="grid grid-cols-2 gap-3">
+          <div>
+            <label className="block text-gray-700 mb-1">Host</label>
+            <input
+              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              value={cfg.host || ''}
+              onChange={(e) =>
+                setDraft(prev => ({
+                  ...(prev as any),
+                  config: { ...(cfg as any), host: e.target.value }
+                }))
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-gray-700 mb-1">Port</label>
+            <input
+              type="number"
+              className="w-full border border-gray-300 rounded-md px-3 py-2"
+              value={typeof cfg.port === 'number' && Number.isFinite(cfg.port) ? cfg.port : ''}
+              onChange={(e) =>
+                setDraft(prev => ({
+                  ...(prev as any),
+                  config: { ...(cfg as any), port: parsePort(e.target.value) }
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        {(draft.type === 'database') && (
+          <>
+            <div>
+              <label className="block text-gray-700 mb-1">Database</label>
+              <input
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                value={cfg.database || ''}
+                onChange={(e) =>
+                  setDraft(prev => ({
+                    ...(prev as any),
+                    config: { ...(cfg as any), database: e.target.value }
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1">Username</label>
+              <input
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                value={cfg.username || ''}
+                onChange={(e) =>
+                  setDraft(prev => ({
+                    ...(prev as any),
+                    config: { ...(cfg as any), username: e.target.value }
+                  }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1">Password</label>
+              <input
+                type="password"
+                className="w-full border border-gray-300 rounded-md px-3 py-2"
+                value={cfg.password || ''}
+                onChange={(e) =>
+                  setDraft(prev => ({
+                    ...(prev as any),
+                    config: { ...(cfg as any), password: e.target.value }
+                  }))
+                }
+              />
+            </div>
+            <div className="flex items-center">
+              <input
+                id={`ssl-${id}`}
+                type="checkbox"
+                className="mr-2"
+                checked={Boolean(cfg.ssl)}
+                onChange={(e) =>
+                  setDraft(prev => ({
+                    ...(prev as any),
+                    config: { ...(cfg as any), ssl: e.target.checked }
+                  }))
+                }
+              />
+              <label htmlFor={`ssl-${id}`} className="text-gray-700">Enable SSL</label>
+            </div>
+          </>
+        )}
+
+        {(draft.type === 'proxy' || draft.type === 'vpn') && (
+          <div>
+            <label className="block text-gray-700 mb-1">Protocol</label>
+            <input
+              className="w-full border border-gray-300 rounded-md px-3 py-2 uppercase"
+              value={cfg.protocol || ''}
+              onChange={(e) =>
+                setDraft(prev => ({
+                  ...(prev as any),
+                  config: { ...(cfg as any), protocol: e.target.value }
+                }))
+              }
+              placeholder={draft.type === 'proxy' ? 'HTTP / SOCKS5' : 'OPENVPN / WIREGUARD'}
+            />
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const actionsFor = (integration: Integration) => {
+    const busyNow = !!busy[integration.id];
+    const editing = isEditing(integration.id);
+    return (
+      <div className="flex items-center gap-2">
+        {/* Status icon */}
+        {getStatusIcon(integration.status)}
+
+        {/* Toggle Status */}
+        <button
+          onClick={() => toggleStatus(integration.id)}
+          disabled={busyNow || editing}
+          title={integration.status === 'connected' ? 'Disconnect' : 'Connect'}
+          className={`p-1 rounded ${editing ? 'opacity-40 cursor-not-allowed' : 'hover:bg-black/5'}`}
+          aria-label="Toggle status"
+        >
+          <Power className="w-4 h-4" />
+        </button>
+
+        {/* Test Connection */}
+        <button
+          onClick={() => testConnection(integration.id)}
+          disabled={busyNow || editing}
+          title="Test connection"
+          className={`p-1 rounded ${editing ? 'opacity-40 cursor-not-allowed' : 'hover:bg-black/5'}`}
+          aria-label="Test connection"
+        >
+          <RefreshCw className={`w-4 h-4 ${busyNow ? 'animate-spin' : ''}`} />
+        </button>
+
+        {/* Edit / Save / Cancel */}
+        {!editing ? (
+          <button
+            onClick={() => startEdit(integration)}
+            className="p-1 rounded hover:bg-black/5"
+            aria-label={`Edit ${integration.name}`}
+            title="Edit"
+          >
+            <Pencil className="w-4 h-4" />
+          </button>
+        ) : (
+          <>
+            <button
+              onClick={saveEdit}
+              className="p-1 rounded text-green-700 hover:bg-green-50"
+              aria-label="Save"
+              title="Save"
+            >
+              <Save className="w-4 h-4" />
+            </button>
+            <button
+              onClick={cancelEdit}
+              className="p-1 rounded text-gray-700 hover:bg-gray-50"
+              aria-label="Cancel"
+              title="Cancel"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </>
+        )}
+
+        {/* Delete */}
+        <button
+          onClick={() => handleDeleteIntegration(integration.id)}
+          className="p-1 rounded text-red-600 hover:bg-red-50"
+          aria-label={`Delete ${integration.name}`}
+          title="Delete"
+        >
+          <Trash2 className="w-4 h-4" />
+        </button>
+      </div>
+    );
+  };
+
+  return (
+    <div className="p-6">
+      {/* Header */}
+      <div className="flex justify-between items-center mb-6">
+        <div>
+          <h1 className="text-2xl font-bold text-gray-900">Integrations</h1>
+          <p className="text-gray-600 mt-1">Manage database connections, proxies, and VPN configurations</p>
+        </div>
+        <button
+          onClick={() => setShowAddForm(true)}
+          className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700 flex items-center gap-2"
+        >
+          <Plus className="w-4 h-4" />
+          Add Integration
+        </button>
+      </div>
+
+      {/* Cards */}
+      <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mb-8">
+        {integrations.map((integration) => (
+          <div key={integration.id} className={`border rounded-lg p-4 ${getCardColor(integration.type)}`}>
+            <div className="flex items-start justify-between mb-3">
+              <div className="flex items-center gap-2">
+                {getIcon(integration.type)}
+                <h3 className="font-semibold text-gray-900">{integration.name}</h3>
+              </div>
+              {actionsFor(integration)}
+            </div>
+
+            {isEditing(integration.id) ? renderEditFields(integration.id) : renderViewFields(integration)}
+          </div>
+        ))}
+      </div>
+
+      {/* Add Integration Modal */}
+      {showAddForm && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4">Add New Integration</h2>
+
+            <div className="space-y-4">
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Name</label>
+                <input
+                  type="text"
+                  value={newIntegration.name || ''}
+                  onChange={(e) => setNewIntegration(prev => ({ ...prev, name: e.target.value }))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  placeholder="Integration name"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Type</label>
+                <select
+                  value={newIntegration.type || 'database'}
+                  onChange={(e) => setNewIntegration(prev => ({ ...prev, type: e.target.value as IntegrationType }))}
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                >
+                  <option value="database">Database</option>
+                  <option value="proxy">Proxy Server</option>
+                  <option value="vpn">VPN Connection</option>
+                </select>
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
+                <input
+                  type="text"
+                  value={newIntegration.config?.host || ''}
+                  onChange={(e) =>
+                    setNewIntegration(prev => ({
+                      ...prev,
+                      config: { ...(prev.config || {}), host: e.target.value }
+                    }))
+                  }
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  placeholder="localhost"
+                />
+              </div>
+
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                <input
+                  type="number"
+                  value={
+                    typeof newIntegration.config?.port === 'number' &&
+                    Number.isFinite(newIntegration.config.port)
+                      ? newIntegration.config.port
+                      : ''
+                  }
+                  onChange={(e) =>
+                    setNewIntegration(prev => ({
+                      ...prev,
+                      config: { ...(prev.config || {}), port: parsePort(e.target.value) }
+                    }))
+                  }
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  placeholder="5432"
+                />
+              </div>
+
+              {newIntegration.type === 'database' && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
+                    <input
+                      type="text"
+                      value={newIntegration.config?.database || ''}
+                      onChange={(e) =>
+                        setNewIntegration(prev => ({
+                          ...prev,
+                          config: { ...(prev.config || {}), database: e.target.value }
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="yelp_test"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                    <input
+                      type="text"
+                      value={newIntegration.config?.username || ''}
+                      onChange={(e) =>
+                        setNewIntegration(prev => ({
+                          ...prev,
+                          config: { ...(prev.config || {}), username: e.target.value }
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="db_user"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                    <input
+                      type="password"
+                      value={newIntegration.config?.password || ''}
+                      onChange={(e) =>
+                        setNewIntegration(prev => ({
+                          ...prev,
+                          config: { ...(prev.config || {}), password: e.target.value }
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="Enter password"
+                    />
+                  </div>
+                  <div className="flex items-center">
+                    <input
+                      id="ssl"
+                      type="checkbox"
+                      checked={Boolean(newIntegration.config?.ssl)}
+                      onChange={(e) =>
+                        setNewIntegration(prev => ({
+                          ...prev,
+                          config: { ...(prev.config || {}), ssl: e.target.checked }
+                        }))
+                      }
+                      className="mr-2"
+                    />
+                    <label htmlFor="ssl" className="text-sm text-gray-700">Enable SSL</label>
+                  </div>
+                </>
+              )}
+            </div>
+
+            <div className="flex justify-end gap-3 mt-6">
+              <button
+                onClick={() => setShowAddForm(false)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleAddIntegration}
+                className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
+              >
+                Add Integration
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}

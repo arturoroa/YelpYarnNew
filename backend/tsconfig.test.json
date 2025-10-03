@@ -1,0 +1,15 @@
+{
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "types": ["node", "jest", "puppeteer"],
+    "esModuleInterop": true,
+    "lib": ["dom", "es2019"]
+  },
+  "include": [
+    "**/*.ts",
+    "tests/**/*.ts"
+  ],
+  "exclude": [
+    "node_modules"
+  ]
+}
