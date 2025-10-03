@@ -183,8 +183,9 @@ async function testDatabaseConnection(config, res) {
     });
   }
 
-  const actualPort = port || 5432;
+  const actualPort = parseInt(port) || 5432;
   const dbProtocol = (protocol || 'postgresql').toLowerCase();
+  const timeout = parseInt(config.timeout) || 15000;
 
   try {
     if (dbProtocol.includes('postgres') || dbProtocol === 'postgresql') {
@@ -196,7 +197,7 @@ async function testDatabaseConnection(config, res) {
         database: database || 'postgres',
         user: username || 'postgres',
         password: password || '',
-        connectionTimeoutMillis: config.timeout || 5000,
+        connectionTimeoutMillis: timeout,
       });
 
       try {
@@ -237,7 +238,7 @@ async function testDatabaseConnection(config, res) {
           database: database || 'mysql',
           user: username || 'root',
           password: password || '',
-          connectTimeout: config.timeout || 5000,
+          connectTimeout: timeout,
         });
 
         await connection.query('SELECT 1');
@@ -248,22 +249,32 @@ async function testDatabaseConnection(config, res) {
           message: `Successfully connected to MySQL database at ${host}:${actualPort}/${database || 'mysql'}`
         });
       } catch (err) {
+        console.error('MySQL connection error:', err);
         let errorMsg = err.message;
         if (err.code === 'ER_ACCESS_DENIED_ERROR') {
           errorMsg = `Authentication failed for user "${username}". Check username and password.`;
         } else if (err.code === 'ER_BAD_DB_ERROR') {
           errorMsg = `Database "${database}" does not exist.`;
         } else if (err.code === 'ECONNREFUSED') {
-          errorMsg = `Connection refused to ${host}:${actualPort}. MySQL service may be down.`;
+          errorMsg = `Connection refused to ${host}:${actualPort}. MySQL service may be down or port is blocked.`;
         } else if (err.code === 'ETIMEDOUT') {
-          errorMsg = `Connection to ${host}:${actualPort} timed out.`;
+          errorMsg = `Connection to ${host}:${actualPort} timed out after ${timeout}ms. This could mean:\n- The host is not reachable\n- Firewall is blocking the connection\n- The server is not responding`;
         } else if (err.code === 'ENOTFOUND') {
-          errorMsg = `Host ${host} not found. Check hostname.`;
+          errorMsg = `Host ${host} not found. Check hostname or DNS settings.`;
+        } else if (err.errno === -111) {
+          errorMsg = `Connection refused to ${host}:${actualPort}. The MySQL service may be down or the port is blocked by a firewall.`;
+        } else if (err.errno === 'ETIMEDOUT' || err.sqlState === 'HY000') {
+          errorMsg = `Connection to ${host}:${actualPort} timed out (${timeout}ms). Possible causes:\n- Host is unreachable from this server\n- Firewall blocking port ${actualPort}\n- MySQL server not accepting remote connections`;
         }
 
         return res.json({
           success: false,
-          error: errorMsg
+          error: errorMsg,
+          details: {
+            code: err.code,
+            errno: err.errno,
+            sqlState: err.sqlState
+          }
         });
       }
     } else {
