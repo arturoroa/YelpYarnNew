@@ -102,13 +102,20 @@ app.put('/api/integrations/:id', async (req, res) => {
 app.delete('/api/integrations/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    console.log('Deleting integration with id:', id);
 
-    const { error } = await supabase
+    const { data, error } = await supabase
       .from('integrations')
       .delete()
-      .eq('id', id);
+      .eq('id', id)
+      .select();
 
-    if (error) throw error;
+    if (error) {
+      console.error('Supabase error:', error);
+      throw error;
+    }
+
+    console.log('Successfully deleted integration:', data);
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting integration:', error);
