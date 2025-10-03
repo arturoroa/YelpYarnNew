@@ -1,8 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import {
-  Database, Server, Key, Shield, Plus, Trash2, CheckCircle, XCircle,
-  Pencil, Save, X, RefreshCw, Power
-} from 'lucide-react';
+import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
