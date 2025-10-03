@@ -1,5 +1,11 @@
 import React, { useEffect, useState } from 'react';
 import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
+import { createClient } from '@supabase/supabase-js';
+
+const supabase = createClient(
+  import.meta.env.VITE_SUPABASE_URL,
+  import.meta.env.VITE_SUPABASE_ANON_KEY
+);
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -56,10 +62,14 @@ export default function Integrations() {
 
   const fetchIntegrations = async () => {
     try {
-      const response = await fetch('/api/integrations');
-      if (!response.ok) throw new Error('Failed to fetch integrations');
-      const data = await response.json();
-      setIntegrations(data.map((item: any) => ({
+      const { data, error } = await supabase
+        .from('integrations')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) throw error;
+
+      setIntegrations((data || []).map((item: any) => ({
         id: item.id,
         name: item.name,
         type: item.type,
@@ -145,19 +155,16 @@ export default function Integrations() {
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
     try {
-      const response = await fetch('/api/integrations', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { error } = await supabase
+        .from('integrations')
+        .insert({
           name,
           type,
-          config: cfg
-        })
-      });
+          config: cfg,
+          status: 'disconnected'
+        });
 
-      if (!response.ok) throw new Error('Failed to create integration');
+      if (error) throw error;
 
       await fetchIntegrations();
       setNewIntegration({ type: 'database', config: {} });
@@ -173,11 +180,12 @@ export default function Integrations() {
     if (!confirm('Are you sure you want to delete this integration?')) return;
 
     try {
-      const response = await fetch(`/api/integrations/${id}`, {
-        method: 'DELETE'
-      });
+      const { error } = await supabase
+        .from('integrations')
+        .delete()
+        .eq('id', id);
 
-      if (!response.ok) throw new Error('Failed to delete integration');
+      if (error) throw error;
 
       setIntegrations(prev => prev.filter(int => int.id !== id));
       showToast('Integration deleted successfully', 'success');
@@ -208,29 +216,28 @@ export default function Integrations() {
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
     try {
-      const response = await fetch(`/api/integrations/${editingId}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { data, error } = await supabase
+        .from('integrations')
+        .update({
           name,
           type,
-          config: cfg
+          config: cfg,
+          updated_at: new Date().toISOString()
         })
-      });
+        .eq('id', editingId)
+        .select()
+        .single();
 
-      if (!response.ok) throw new Error('Failed to update integration');
+      if (error) throw error;
 
-      const updated = await response.json();
       setIntegrations(prev =>
         prev.map(i => (i.id === editingId ? {
-          id: updated.id,
-          name: updated.name,
-          type: updated.type,
-          status: updated.status,
-          lastSync: updated.last_sync,
-          config: updated.config
+          id: data.id,
+          name: data.name,
+          type: data.type,
+          status: data.status,
+          lastSync: data.last_sync,
+          config: data.config
         } : i))
       );
       cancelEdit();
@@ -250,17 +257,12 @@ export default function Integrations() {
       integration.status === 'disconnected' ? 'connected' : 'disconnected';
 
     try {
-      const response = await fetch(`/api/integrations/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: next
-        })
-      });
+      const { error } = await supabase
+        .from('integrations')
+        .update({ status: next })
+        .eq('id', id);
 
-      if (!response.ok) throw new Error('Failed to update status');
+      if (error) throw error;
 
       setIntegrations(prev =>
         prev.map(i => (i.id === id ? { ...i, status: next } : i))
@@ -278,32 +280,24 @@ export default function Integrations() {
       const target = integrations.find(i => i.id === id);
       if (!target) return;
 
-      const response = await fetch('/api/integrations/test-connection', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          type: target.type,
-          config: target.config
-        })
-      });
+      // Note: Connection testing requires backend server
+      showToast('Connection testing requires backend server on port 3001', 'info');
 
-      const result = await response.json();
+      // Simulate test for demo purposes
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      const newStatus = result.success ? 'connected' : 'error';
-      const lastSync = result.success ? 'just now' : undefined;
+      const newStatus: IntegrationStatus = 'disconnected';
+      const lastSync = 'Demo mode - backend required';
 
-      await fetch(`/api/integrations/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
+      const { error } = await supabase
+        .from('integrations')
+        .update({
           status: newStatus,
           last_sync: lastSync
         })
-      });
+        .eq('id', id);
+
+      if (error) throw error;
 
       setIntegrations(prev =>
         prev.map(i =>
@@ -313,23 +307,15 @@ export default function Integrations() {
         )
       );
 
-      if (result.success) {
-        showToast('Connection successful', 'success');
-      } else {
-        showToast(`Connection failed: ${result.error}`, 'error');
-      }
+      showToast('Test completed in demo mode', 'info');
     } catch (error) {
-      const errorStatus = 'error';
+      const errorStatus: IntegrationStatus = 'error';
 
-      await fetch(`/api/integrations/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({
-          status: errorStatus
-        })
-      }).catch(() => {});
+      await supabase
+        .from('integrations')
+        .update({ status: errorStatus })
+        .eq('id', id)
+        .catch(() => {});
 
       setIntegrations(prev =>
         prev.map(i =>
