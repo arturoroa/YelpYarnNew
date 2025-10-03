@@ -62,6 +62,7 @@ export default function Integrations() {
 
   const fetchIntegrations = async () => {
     try {
+      // Use Supabase directly for data operations
       const { data, error } = await supabase
         .from('integrations')
         .select('*')
@@ -280,15 +281,28 @@ export default function Integrations() {
       const target = integrations.find(i => i.id === id);
       if (!target) return;
 
-      // Note: Connection testing requires backend server
-      showToast('Connection testing requires backend server on port 3001', 'info');
+      // Try backend API for real connection testing
+      const response = await fetch('/api/integrations/test-connection', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({
+          type: target.type,
+          config: target.config
+        })
+      });
 
-      // Simulate test for demo purposes
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      if (!response.ok) {
+        throw new Error(`Backend returned ${response.status}`);
+      }
 
-      const newStatus: IntegrationStatus = 'disconnected';
-      const lastSync = 'Demo mode - backend required';
+      const result = await response.json();
 
+      const newStatus: IntegrationStatus = result.success ? 'connected' : 'error';
+      const lastSync = result.success ? 'just now' : undefined;
+
+      // Update in database
       const { error } = await supabase
         .from('integrations')
         .update({
@@ -307,7 +321,11 @@ export default function Integrations() {
         )
       );
 
-      showToast('Test completed in demo mode', 'info');
+      if (result.success) {
+        showToast(result.message || 'Connection successful', 'success');
+      } else {
+        showToast(result.error || 'Connection failed', 'error');
+      }
     } catch (error) {
       const errorStatus: IntegrationStatus = 'error';
 
