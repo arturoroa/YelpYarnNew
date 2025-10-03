@@ -4,7 +4,7 @@
   "version": "1.0.0",
   "type": "module",
   "scripts": {
-    "dev": "concurrently    \"npm run dev:frontend\"  \"sleep 30 && npm run dev:minimal-backend\" ",
+    "dev": "concurrently    \"npm run dev:frontend\"  \"node -e \\\"setTimeout(()=>{},30000)\\\" && npm run dev:minimal-backend\" ",
     "dev:frontend": "vite",
     "dev:minimal-backend": "node backend/minimal-server.js",
     "dev:backend": "nodemon --watch backend --ext ts --exec \"npm run build:backend && node backend/dist/server.js\"",
