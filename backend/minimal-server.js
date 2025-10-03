@@ -166,6 +166,7 @@ async function testDatabaseConnection(config, res) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     const timeout = config.timeout || 5000;
+    const actualPort = port || 5432;
 
     socket.setTimeout(timeout);
 
@@ -173,7 +174,7 @@ async function testDatabaseConnection(config, res) {
       socket.destroy();
       res.json({
         success: true,
-        message: 'Connection successful'
+        message: `Successfully connected to ${host}:${actualPort}`
       });
       resolve();
     });
@@ -182,21 +183,31 @@ async function testDatabaseConnection(config, res) {
       socket.destroy();
       res.json({
         success: false,
-        error: `Connection timeout after ${timeout}ms`
+        error: `Connection to ${host}:${actualPort} timed out after ${timeout}ms`
       });
       resolve();
     });
 
     socket.on('error', (err) => {
       socket.destroy();
+      let errorMsg = err.message;
+      if (err.code === 'ECONNREFUSED') {
+        errorMsg = `Connection refused to ${host}:${actualPort}. Database service may be down or unreachable.`;
+      } else if (err.code === 'ETIMEDOUT') {
+        errorMsg = `Connection to ${host}:${actualPort} timed out.`;
+      } else if (err.code === 'ENOTFOUND') {
+        errorMsg = `Host ${host} not found. Check hostname.`;
+      } else if (err.code === 'ENETUNREACH') {
+        errorMsg = `Network unreachable to ${host}:${actualPort}.`;
+      }
       res.json({
         success: false,
-        error: `Connection failed: ${err.message}`
+        error: errorMsg
       });
       resolve();
     });
 
-    socket.connect(port || 5432, host);
+    socket.connect(actualPort, host);
   });
 }
 
@@ -215,6 +226,7 @@ async function testProxyConnection(config, res) {
   return new Promise((resolve) => {
     const socket = new net.Socket();
     const timeout = 5000;
+    const actualPort = port || 8080;
 
     socket.setTimeout(timeout);
 
@@ -222,7 +234,7 @@ async function testProxyConnection(config, res) {
       socket.destroy();
       res.json({
         success: true,
-        message: 'Connection successful'
+        message: `Successfully connected to proxy ${host}:${actualPort}`
       });
       resolve();
     });
@@ -231,21 +243,31 @@ async function testProxyConnection(config, res) {
       socket.destroy();
       res.json({
         success: false,
-        error: `Connection timeout after ${timeout}ms`
+        error: `Connection to ${host}:${actualPort} timed out after ${timeout}ms`
       });
       resolve();
     });
 
     socket.on('error', (err) => {
       socket.destroy();
+      let errorMsg = err.message;
+      if (err.code === 'ECONNREFUSED') {
+        errorMsg = `Connection refused to ${host}:${actualPort}. Proxy service may be down or unreachable.`;
+      } else if (err.code === 'ETIMEDOUT') {
+        errorMsg = `Connection to ${host}:${actualPort} timed out.`;
+      } else if (err.code === 'ENOTFOUND') {
+        errorMsg = `Host ${host} not found. Check hostname.`;
+      } else if (err.code === 'ENETUNREACH') {
+        errorMsg = `Network unreachable to ${host}:${actualPort}.`;
+      }
       res.json({
         success: false,
-        error: `Connection failed: ${err.message}`
+        error: errorMsg
       });
       resolve();
     });
 
-    socket.connect(port || 8080, host);
+    socket.connect(actualPort, host);
   });
 }
 
@@ -279,7 +301,7 @@ async function testVpnConnection(config, res) {
       socket.destroy();
       res.json({
         success: true,
-        message: 'Connection successful'
+        message: `Successfully connected to VPN ${host}:${port} (${protocol})`
       });
       resolve();
     });
@@ -288,16 +310,26 @@ async function testVpnConnection(config, res) {
       socket.destroy();
       res.json({
         success: false,
-        error: `Connection timeout after ${timeout}ms`
+        error: `Connection to ${host}:${port} timed out after ${timeout}ms`
       });
       resolve();
     });
 
     socket.on('error', (err) => {
       socket.destroy();
+      let errorMsg = err.message;
+      if (err.code === 'ECONNREFUSED') {
+        errorMsg = `Connection refused to ${host}:${port}. VPN service may be down or unreachable.`;
+      } else if (err.code === 'ETIMEDOUT') {
+        errorMsg = `Connection to ${host}:${port} timed out.`;
+      } else if (err.code === 'ENOTFOUND') {
+        errorMsg = `Host ${host} not found. Check hostname.`;
+      } else if (err.code === 'ENETUNREACH') {
+        errorMsg = `Network unreachable to ${host}:${port}.`;
+      }
       res.json({
         success: false,
-        error: `Connection failed: ${err.message}`
+        error: errorMsg
       });
       resolve();
     });
