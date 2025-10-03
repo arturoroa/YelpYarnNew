@@ -8,10 +8,17 @@ import mysql from 'mysql2/promise.js';
 
 dotenv.config();
 
-const supabase = createClient(
-  process.env.VITE_SUPABASE_URL,
-  process.env.VITE_SUPABASE_ANON_KEY
-);
+let supabase;
+try {
+  supabase = createClient(
+    process.env.VITE_SUPABASE_URL,
+    process.env.VITE_SUPABASE_ANON_KEY
+  );
+  console.log('Supabase client initialized');
+} catch (error) {
+  console.error('Failed to initialize Supabase client:', error.message);
+  process.exit(1);
+}
 
 // Crear aplicación Express
 const app = express();
@@ -582,7 +589,19 @@ app.post('/api/tests/execute-puppeteer', async (req, res) => {
 
 // Iniciar el servidor
 const PORT = 3001;
-app.listen(PORT, () => {
+const server = app.listen(PORT, () => {
   console.log(`Minimal server running on http://localhost:${PORT}`);
   console.log(`Puppeteer endpoint available at: http://localhost:${PORT}/api/tests/execute-puppeteer`);
+});
+
+server.on('error', (error) => {
+  if (error.code === 'EADDRINUSE') {
+    console.error(`Port ${PORT} is already in use. Trying to restart...`);
+    setTimeout(() => {
+      server.close();
+      server.listen(PORT);
+    }, 1000);
+  } else {
+    console.error('Server error:', error);
+  }
 });
