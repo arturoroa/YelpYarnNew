@@ -155,6 +155,31 @@ export default function Integrations() {
     const cfg = { ...(newIntegration.config || {}) };
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
+    // For SQLite, create the database file automatically
+    if (type === 'database' && cfg.protocol === 'sqlite' && cfg.databaseName) {
+      const dbName = cfg.databaseName.trim();
+      const filePath = `/tmp/cc-agent/57989374/project/${dbName}.sqlite`;
+      cfg.filePath = filePath;
+      delete cfg.databaseName;
+
+      // Create the SQLite database
+      try {
+        const response = await fetch('/api/integrations/test-connection', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ type: 'database', config: { protocol: 'sqlite', filePath } })
+        });
+        const result = await response.json();
+        if (!result.success) {
+          showToast(`Failed to create database: ${result.error}`, 'error');
+          return;
+        }
+      } catch (err) {
+        showToast('Failed to create SQLite database', 'error');
+        return;
+      }
+    }
+
     try {
       const { error } = await supabase
         .from('integrations')
@@ -513,17 +538,17 @@ export default function Integrations() {
             </div>
             {cfg.protocol === 'sqlite' ? (
               <div>
-                <label className="block text-gray-700 mb-1">File Path</label>
+                <label className="block text-gray-700 mb-1">Database Name</label>
                 <input
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={cfg.filePath || ''}
+                  value={cfg.databaseName || ''}
                   onChange={(e) =>
                     setDraft(prev => ({
                       ...(prev as any),
-                      config: { ...(cfg as any), filePath: e.target.value }
+                      config: { ...(cfg as any), databaseName: e.target.value }
                     }))
                   }
-                  placeholder="/path/to/database.sqlite"
+                  placeholder="mydatabase"
                 />
               </div>
             ) : (
@@ -802,18 +827,18 @@ export default function Integrations() {
                   </div>
                   {newIntegration.config?.protocol === 'sqlite' ? (
                     <div>
-                      <label className="block text-sm font-medium text-gray-700 mb-1">File Path</label>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
                       <input
                         type="text"
-                        value={newIntegration.config?.filePath || ''}
+                        value={newIntegration.config?.databaseName || ''}
                         onChange={(e) =>
                           setNewIntegration(prev => ({
                             ...prev,
-                            config: { ...(prev.config || {}), filePath: e.target.value }
+                            config: { ...(prev.config || {}), databaseName: e.target.value }
                           }))
                         }
                         className="w-full border border-gray-300 rounded-md px-3 py-2"
-                        placeholder="/path/to/database.sqlite"
+                        placeholder="mydatabase"
                       />
                     </div>
                   ) : (
