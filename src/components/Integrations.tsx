@@ -487,36 +487,6 @@ export default function Integrations() {
           </select>
         </div>
 
-        <div className="grid grid-cols-2 gap-3">
-          <div>
-            <label className="block text-gray-700 mb-1">Host</label>
-            <input
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-              value={cfg.host || ''}
-              onChange={(e) =>
-                setDraft(prev => ({
-                  ...(prev as any),
-                  config: { ...(cfg as any), host: e.target.value }
-                }))
-              }
-            />
-          </div>
-          <div>
-            <label className="block text-gray-700 mb-1">Port</label>
-            <input
-              type="number"
-              className="w-full border border-gray-300 rounded-md px-3 py-2"
-              value={typeof cfg.port === 'number' && Number.isFinite(cfg.port) ? cfg.port : ''}
-              onChange={(e) =>
-                setDraft(prev => ({
-                  ...(prev as any),
-                  config: { ...(cfg as any), port: parsePort(e.target.value) }
-                }))
-              }
-            />
-          </div>
-        </div>
-
         {(draft.type === 'database') && (
           <>
             <div>
@@ -553,6 +523,35 @@ export default function Integrations() {
               </div>
             ) : (
               <>
+                <div className="grid grid-cols-2 gap-3">
+                  <div>
+                    <label className="block text-gray-700 mb-1">Host</label>
+                    <input
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      value={cfg.host || ''}
+                      onChange={(e) =>
+                        setDraft(prev => ({
+                          ...(prev as any),
+                          config: { ...(cfg as any), host: e.target.value }
+                        }))
+                      }
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-gray-700 mb-1">Port</label>
+                    <input
+                      type="number"
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      value={typeof cfg.port === 'number' && Number.isFinite(cfg.port) ? cfg.port : ''}
+                      onChange={(e) =>
+                        setDraft(prev => ({
+                          ...(prev as any),
+                          config: { ...(cfg as any), port: parsePort(e.target.value) }
+                        }))
+                      }
+                    />
+                  </div>
+                </div>
                 <div>
                   <label className="block text-gray-700 mb-1">Database</label>
                   <input
@@ -614,20 +613,51 @@ export default function Integrations() {
         )}
 
         {(draft.type === 'proxy' || draft.type === 'vpn') && (
-          <div>
-            <label className="block text-gray-700 mb-1">Protocol</label>
-            <input
-              className="w-full border border-gray-300 rounded-md px-3 py-2 uppercase"
-              value={cfg.protocol || ''}
-              onChange={(e) =>
-                setDraft(prev => ({
-                  ...(prev as any),
-                  config: { ...(cfg as any), protocol: e.target.value }
-                }))
-              }
-              placeholder={draft.type === 'proxy' ? 'HTTP / SOCKS5' : 'OPENVPN / WIREGUARD'}
-            />
-          </div>
+          <>
+            <div className="grid grid-cols-2 gap-3">
+              <div>
+                <label className="block text-gray-700 mb-1">Host</label>
+                <input
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  value={cfg.host || ''}
+                  onChange={(e) =>
+                    setDraft(prev => ({
+                      ...(prev as any),
+                      config: { ...(cfg as any), host: e.target.value }
+                    }))
+                  }
+                />
+              </div>
+              <div>
+                <label className="block text-gray-700 mb-1">Port</label>
+                <input
+                  type="number"
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  value={typeof cfg.port === 'number' && Number.isFinite(cfg.port) ? cfg.port : ''}
+                  onChange={(e) =>
+                    setDraft(prev => ({
+                      ...(prev as any),
+                      config: { ...(cfg as any), port: parsePort(e.target.value) }
+                    }))
+                  }
+                />
+              </div>
+            </div>
+            <div>
+              <label className="block text-gray-700 mb-1">Protocol</label>
+              <input
+                className="w-full border border-gray-300 rounded-md px-3 py-2 uppercase"
+                value={cfg.protocol || ''}
+                onChange={(e) =>
+                  setDraft(prev => ({
+                    ...(prev as any),
+                    config: { ...(cfg as any), protocol: e.target.value }
+                  }))
+                }
+                placeholder={draft.type === 'proxy' ? 'HTTP / SOCKS5' : 'OPENVPN / WIREGUARD'}
+              />
+            </div>
+          </>
         )}
       </div>
     );
@@ -769,43 +799,6 @@ export default function Integrations() {
                 </select>
               </div>
 
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
-                <input
-                  type="text"
-                  value={newIntegration.config?.host || ''}
-                  onChange={(e) =>
-                    setNewIntegration(prev => ({
-                      ...prev,
-                      config: { ...(prev.config || {}), host: e.target.value }
-                    }))
-                  }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="localhost"
-                />
-              </div>
-
-              <div>
-                <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
-                <input
-                  type="number"
-                  value={
-                    typeof newIntegration.config?.port === 'number' &&
-                    Number.isFinite(newIntegration.config.port)
-                      ? newIntegration.config.port
-                      : ''
-                  }
-                  onChange={(e) =>
-                    setNewIntegration(prev => ({
-                      ...prev,
-                      config: { ...(prev.config || {}), port: parsePort(e.target.value) }
-                    }))
-                  }
-                  className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  placeholder="5432"
-                />
-              </div>
-
               {newIntegration.type === 'database' && (
                 <>
                   <div>
@@ -843,6 +836,41 @@ export default function Integrations() {
                     </div>
                   ) : (
                     <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
+                        <input
+                          type="text"
+                          value={newIntegration.config?.host || ''}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), host: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="localhost"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                        <input
+                          type="number"
+                          value={
+                            typeof newIntegration.config?.port === 'number' &&
+                            Number.isFinite(newIntegration.config.port)
+                              ? newIntegration.config.port
+                              : ''
+                          }
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), port: parsePort(e.target.value) }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="5432"
+                        />
+                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
                         <input
@@ -905,6 +933,46 @@ export default function Integrations() {
                       </div>
                     </>
                   )}
+                </>
+              )}
+
+              {(newIntegration.type === 'proxy' || newIntegration.type === 'vpn') && (
+                <>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
+                    <input
+                      type="text"
+                      value={newIntegration.config?.host || ''}
+                      onChange={(e) =>
+                        setNewIntegration(prev => ({
+                          ...prev,
+                          config: { ...(prev.config || {}), host: e.target.value }
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="localhost"
+                    />
+                  </div>
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                    <input
+                      type="number"
+                      value={
+                        typeof newIntegration.config?.port === 'number' &&
+                        Number.isFinite(newIntegration.config.port)
+                          ? newIntegration.config.port
+                          : ''
+                      }
+                      onChange={(e) =>
+                        setNewIntegration(prev => ({
+                          ...prev,
+                          config: { ...(prev.config || {}), port: parsePort(e.target.value) }
+                        }))
+                      }
+                      className="w-full border border-gray-300 rounded-md px-3 py-2"
+                      placeholder="8080"
+                    />
+                  </div>
                 </>
               )}
             </div>
