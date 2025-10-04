@@ -5,6 +5,7 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import pg from 'pg';
 import mysql from 'mysql2/promise.js';
+import Database from 'better-sqlite3';
 
 dotenv.config();
 
@@ -175,8 +176,9 @@ app.post('/api/integrations/test-connection', async (req, res) => {
 
 async function testDatabaseConnection(config, res) {
   const { host, port, database, username, password, protocol } = config;
+  const dbProtocol = (protocol || 'postgresql').toLowerCase();
 
-  if (!host) {
+  if (!host && dbProtocol !== 'sqlite') {
     return res.json({
       success: false,
       error: 'Host is required'
@@ -184,7 +186,6 @@ async function testDatabaseConnection(config, res) {
   }
 
   const actualPort = parseInt(port) || 5432;
-  const dbProtocol = (protocol || 'postgresql').toLowerCase();
   const timeout = parseInt(config.timeout) || 15000;
 
   try {
@@ -277,10 +278,50 @@ async function testDatabaseConnection(config, res) {
           }
         });
       }
+    } else if (dbProtocol === 'sqlite') {
+      const { filePath } = config;
+
+      if (!filePath) {
+        return res.json({
+          success: false,
+          error: 'File path is required for SQLite'
+        });
+      }
+
+      try {
+        const db = new Database(filePath, { readonly: true, fileMustExist: true });
+        const result = db.prepare('SELECT 1 as test').get();
+        db.close();
+
+        return res.json({
+          success: true,
+          message: `Successfully connected to SQLite database at ${filePath}`
+        });
+      } catch (err) {
+        console.error('SQLite connection error:', err);
+        let errorMsg = err.message;
+
+        if (err.code === 'SQLITE_CANTOPEN') {
+          errorMsg = `Cannot open SQLite database at ${filePath}. File may not exist or is not accessible.`;
+        } else if (err.message.includes('ENOENT')) {
+          errorMsg = `SQLite database file not found at ${filePath}`;
+        } else if (err.message.includes('not a database')) {
+          errorMsg = `File at ${filePath} is not a valid SQLite database`;
+        }
+
+        return res.json({
+          success: false,
+          error: errorMsg,
+          details: {
+            code: err.code,
+            errno: err.errno
+          }
+        });
+      }
     } else {
       return res.json({
         success: false,
-        error: `Unsupported database protocol: ${dbProtocol}. Supported: postgresql, mysql`
+        error: `Unsupported database protocol: ${dbProtocol}. Supported: postgresql, mysql, sqlite`
       });
     }
   } catch (err) {

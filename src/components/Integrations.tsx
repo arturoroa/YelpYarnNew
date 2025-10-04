@@ -508,63 +508,83 @@ export default function Integrations() {
               >
                 <option value="postgresql">PostgreSQL</option>
                 <option value="mysql">MySQL</option>
+                <option value="sqlite">SQLite</option>
               </select>
             </div>
-            <div>
-              <label className="block text-gray-700 mb-1">Database</label>
-              <input
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                value={cfg.database || ''}
-                onChange={(e) =>
-                  setDraft(prev => ({
-                    ...(prev as any),
-                    config: { ...(cfg as any), database: e.target.value }
-                  }))
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 mb-1">Username</label>
-              <input
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                value={cfg.username || ''}
-                onChange={(e) =>
-                  setDraft(prev => ({
-                    ...(prev as any),
-                    config: { ...(cfg as any), username: e.target.value }
-                  }))
-                }
-              />
-            </div>
-            <div>
-              <label className="block text-gray-700 mb-1">Password</label>
-              <input
-                type="password"
-                className="w-full border border-gray-300 rounded-md px-3 py-2"
-                value={cfg.password || ''}
-                onChange={(e) =>
-                  setDraft(prev => ({
-                    ...(prev as any),
-                    config: { ...(cfg as any), password: e.target.value }
-                  }))
-                }
-              />
-            </div>
-            <div className="flex items-center">
-              <input
-                id={`ssl-${id}`}
-                type="checkbox"
-                className="mr-2"
-                checked={Boolean(cfg.ssl)}
-                onChange={(e) =>
-                  setDraft(prev => ({
-                    ...(prev as any),
-                    config: { ...(cfg as any), ssl: e.target.checked }
-                  }))
-                }
-              />
-              <label htmlFor={`ssl-${id}`} className="text-gray-700">Enable SSL</label>
-            </div>
+            {cfg.protocol === 'sqlite' ? (
+              <div>
+                <label className="block text-gray-700 mb-1">File Path</label>
+                <input
+                  className="w-full border border-gray-300 rounded-md px-3 py-2"
+                  value={cfg.filePath || ''}
+                  onChange={(e) =>
+                    setDraft(prev => ({
+                      ...(prev as any),
+                      config: { ...(cfg as any), filePath: e.target.value }
+                    }))
+                  }
+                  placeholder="/path/to/database.sqlite"
+                />
+              </div>
+            ) : (
+              <>
+                <div>
+                  <label className="block text-gray-700 mb-1">Database</label>
+                  <input
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={cfg.database || ''}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), database: e.target.value }
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 mb-1">Username</label>
+                  <input
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={cfg.username || ''}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), username: e.target.value }
+                      }))
+                    }
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 mb-1">Password</label>
+                  <input
+                    type="password"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={cfg.password || ''}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), password: e.target.value }
+                      }))
+                    }
+                  />
+                </div>
+                <div className="flex items-center">
+                  <input
+                    id={`ssl-${id}`}
+                    type="checkbox"
+                    className="mr-2"
+                    checked={Boolean(cfg.ssl)}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), ssl: e.target.checked }
+                      }))
+                    }
+                  />
+                  <label htmlFor={`ssl-${id}`} className="text-gray-700">Enable SSL</label>
+                </div>
+              </>
+            )}
           </>
         )}
 
@@ -777,68 +797,89 @@ export default function Integrations() {
                     >
                       <option value="postgresql">PostgreSQL</option>
                       <option value="mysql">MySQL</option>
+                      <option value="sqlite">SQLite</option>
                     </select>
                   </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
-                    <input
-                      type="text"
-                      value={newIntegration.config?.database || ''}
-                      onChange={(e) =>
-                        setNewIntegration(prev => ({
-                          ...prev,
-                          config: { ...(prev.config || {}), database: e.target.value }
-                        }))
-                      }
-                      className="w-full border border-gray-300 rounded-md px-3 py-2"
-                      placeholder="yelp_test"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
-                    <input
-                      type="text"
-                      value={newIntegration.config?.username || ''}
-                      onChange={(e) =>
-                        setNewIntegration(prev => ({
-                          ...prev,
-                          config: { ...(prev.config || {}), username: e.target.value }
-                        }))
-                      }
-                      className="w-full border border-gray-300 rounded-md px-3 py-2"
-                      placeholder="db_user"
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
-                    <input
-                      type="password"
-                      value={newIntegration.config?.password || ''}
-                      onChange={(e) =>
-                        setNewIntegration(prev => ({
-                          ...prev,
-                          config: { ...(prev.config || {}), password: e.target.value }
-                        }))
-                      }
-                      className="w-full border border-gray-300 rounded-md px-3 py-2"
-                      placeholder="Enter password"
-                    />
-                  </div>
-                  <div className="flex items-center">
-                    <input
-                      id="ssl"
-                      type="checkbox"
-                      checked={Boolean(newIntegration.config?.ssl)}
-                      onChange={(e) =>
-                        setNewIntegration(prev => ({
-                          ...prev,
-                          config: { ...(prev.config || {}), ssl: e.target.checked }
-                        }))
-                      }
-                      className="mr-2"
-                    />
-                    <label htmlFor="ssl" className="text-sm text-gray-700">Enable SSL</label>
-                  </div>
+                  {newIntegration.config?.protocol === 'sqlite' ? (
+                    <div>
+                      <label className="block text-sm font-medium text-gray-700 mb-1">File Path</label>
+                      <input
+                        type="text"
+                        value={newIntegration.config?.filePath || ''}
+                        onChange={(e) =>
+                          setNewIntegration(prev => ({
+                            ...prev,
+                            config: { ...(prev.config || {}), filePath: e.target.value }
+                          }))
+                        }
+                        className="w-full border border-gray-300 rounded-md px-3 py-2"
+                        placeholder="/path/to/database.sqlite"
+                      />
+                    </div>
+                  ) : (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
+                        <input
+                          type="text"
+                          value={newIntegration.config?.database || ''}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), database: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="yelp_test"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Username</label>
+                        <input
+                          type="text"
+                          value={newIntegration.config?.username || ''}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), username: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="db_user"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Password</label>
+                        <input
+                          type="password"
+                          value={newIntegration.config?.password || ''}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), password: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="Enter password"
+                        />
+                      </div>
+                      <div className="flex items-center">
+                        <input
+                          id="ssl"
+                          type="checkbox"
+                          checked={Boolean(newIntegration.config?.ssl)}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), ssl: e.target.checked }
+                            }))
+                          }
+                          className="mr-2"
+                        />
+                        <label htmlFor="ssl" className="text-sm text-gray-700">Enable SSL</label>
+                      </div>
+                    </>
+                  )}
                 </>
               )}
             </div>
