@@ -289,24 +289,39 @@ async function testDatabaseConnection(config, res) {
       }
 
       try {
-        const db = new Database(filePath, { readonly: true, fileMustExist: true });
+        let db;
+        let wasCreated = false;
+
+        try {
+          db = new Database(filePath, { readonly: true, fileMustExist: true });
+        } catch (openErr) {
+          if (openErr.code === 'SQLITE_CANTOPEN' || openErr.message.includes('ENOENT')) {
+            db = new Database(filePath);
+            wasCreated = true;
+          } else {
+            throw openErr;
+          }
+        }
+
         const result = db.prepare('SELECT 1 as test').get();
         db.close();
 
         return res.json({
           success: true,
-          message: `Successfully connected to SQLite database at ${filePath}`
+          message: wasCreated
+            ? `SQLite database created and connected successfully at ${filePath}`
+            : `Successfully connected to SQLite database at ${filePath}`
         });
       } catch (err) {
         console.error('SQLite connection error:', err);
         let errorMsg = err.message;
 
-        if (err.code === 'SQLITE_CANTOPEN') {
-          errorMsg = `Cannot open SQLite database at ${filePath}. File may not exist or is not accessible.`;
-        } else if (err.message.includes('ENOENT')) {
-          errorMsg = `SQLite database file not found at ${filePath}`;
-        } else if (err.message.includes('not a database')) {
+        if (err.message.includes('not a database')) {
           errorMsg = `File at ${filePath} is not a valid SQLite database`;
+        } else if (err.code === 'EACCES') {
+          errorMsg = `Permission denied accessing ${filePath}`;
+        } else {
+          errorMsg = `Failed to connect to SQLite database: ${err.message}`;
         }
 
         return res.json({
