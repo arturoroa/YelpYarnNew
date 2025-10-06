@@ -5,7 +5,17 @@ import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import pg from 'pg';
 import mysql from 'mysql2/promise.js';
-import Database from 'better-sqlite3';
+import { fileURLToPath } from 'url';
+import { dirname, join } from 'path';
+import { createRequire } from 'module';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+const projectRoot = join(__dirname, '..');
+
+// Create require from project root to load better-sqlite3 correctly
+const require = createRequire(join(projectRoot, 'package.json'));
+const Database = require('better-sqlite3');
 
 dotenv.config();
 
