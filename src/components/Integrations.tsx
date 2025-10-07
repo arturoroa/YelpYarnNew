@@ -5,13 +5,6 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
-console.log('Supabase config check:', {
-  hasUrl: !!supabaseUrl,
-  hasKey: !!supabaseKey,
-  urlLength: supabaseUrl?.length,
-  keyLength: supabaseKey?.length
-});
-
 const supabase = (supabaseUrl && supabaseKey)
   ? createClient(supabaseUrl, supabaseKey)
   : null;
@@ -168,7 +161,15 @@ export default function Integrations() {
     const cfg = { ...(newIntegration.config || {}) };
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
-    if (!supabase) return;
+    // Set default protocol for on-prem connections
+    if (type === 'database' && cfg.connectionMethod === 'on-prem' && !cfg.protocol) {
+      cfg.protocol = 'postgresql';
+    }
+
+    if (!supabase) {
+      showToast('Database not configured. Please restart the dev server.', 'error');
+      return;
+    }
 
     try {
       const { error } = await supabase
@@ -920,22 +921,6 @@ export default function Integrations() {
                     </>
                   ) : (
                     <>
-                      <div>
-                        <label className="block text-sm font-medium text-gray-700 mb-1">Database Type</label>
-                        <select
-                          value={newIntegration.config?.protocol || 'postgresql'}
-                          onChange={(e) =>
-                            setNewIntegration(prev => ({
-                              ...prev,
-                              config: { ...(prev.config || {}), protocol: e.target.value }
-                            }))
-                          }
-                          className="w-full border border-gray-300 rounded-md px-3 py-2"
-                        >
-                          <option value="postgresql">PostgreSQL</option>
-                          <option value="mysql">MySQL</option>
-                        </select>
-                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
                         <input
