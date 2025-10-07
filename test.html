@@ -1,0 +1,45 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Page</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            padding: 20px;
+        }
+        .success { color: green; }
+        .error { color: red; }
+    </style>
+</head>
+<body>
+    <h1>Basic Test Page</h1>
+    <div id="results"></div>
+
+    <script>
+        const results = document.getElementById('results');
+
+        // Test 1: Basic JS
+        results.innerHTML += '<p class="success">✓ JavaScript is working</p>';
+
+        // Test 2: Fetch API
+        fetch('http://localhost:3001/health')
+            .then(res => res.json())
+            .then(data => {
+                results.innerHTML += '<p class="success">✓ Backend API is reachable</p>';
+                results.innerHTML += '<pre>' + JSON.stringify(data, null, 2) + '</pre>';
+            })
+            .catch(err => {
+                results.innerHTML += '<p class="error">✗ Backend API failed: ' + err.message + '</p>';
+            });
+
+        // Test 3: Module support
+        if ('noModule' in document.createElement('script')) {
+            results.innerHTML += '<p class="success">✓ ES Modules supported</p>';
+        } else {
+            results.innerHTML += '<p class="error">✗ ES Modules NOT supported</p>';
+        }
+    </script>
+</body>
+</html>
