@@ -128,11 +128,21 @@ const AppContent: React.FC = () => {
 
 // Componente App con el provider de autenticación
 const App: React.FC = () => {
-  return (
-    <AuthProvider>
-      <AppContent />
-    </AuthProvider>
-  );
+  try {
+    return (
+      <AuthProvider>
+        <AppContent />
+      </AuthProvider>
+    );
+  } catch (error) {
+    console.error("Error in App component:", error);
+    return (
+      <div style={{ padding: '20px', color: 'red' }}>
+        <h1>Application Error</h1>
+        <pre>{error instanceof Error ? error.message : String(error)}</pre>
+      </div>
+    );
+  }
 };
 
 export default App;
