@@ -2,13 +2,14 @@ import React, { useEffect, useState } from 'react';
 import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-// Make Supabase optional
-const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
-  ? createClient(
-      import.meta.env.VITE_SUPABASE_URL,
-      import.meta.env.VITE_SUPABASE_ANON_KEY
-    )
-  : null;
+const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
+const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
+
+if (!supabaseUrl || !supabaseKey) {
+  throw new Error('Supabase configuration is missing. Please check your environment variables.');
+}
+
+const supabase = createClient(supabaseUrl, supabaseKey);
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -67,11 +68,6 @@ export default function Integrations() {
 
   const fetchIntegrations = async () => {
     try {
-      if (!supabase) {
-        console.warn('Supabase not configured, skipping fetch');
-        return;
-      }
-
       // Use Supabase directly for data operations
       const { data, error } = await supabase
         .from('integrations')
@@ -166,11 +162,6 @@ export default function Integrations() {
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
     try {
-      if (!supabase) {
-        showToast('Supabase not configured', 'error');
-        return;
-      }
-
       const { error } = await supabase
         .from('integrations')
         .insert({
@@ -194,11 +185,6 @@ export default function Integrations() {
 
   const handleDeleteIntegration = async (id: string) => {
     try {
-      if (!supabase) {
-        showToast('Supabase not configured', 'error');
-        return;
-      }
-
       const { error } = await supabase
         .from('integrations')
         .delete()
@@ -235,11 +221,6 @@ export default function Integrations() {
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
     try {
-      if (!supabase) {
-        showToast('Supabase not configured', 'error');
-        return;
-      }
-
       const { data, error } = await supabase
         .from('integrations')
         .update({
@@ -281,11 +262,6 @@ export default function Integrations() {
       integration.status === 'disconnected' ? 'connected' : 'disconnected';
 
     try {
-      if (!supabase) {
-        showToast('Supabase not configured', 'error');
-        return;
-      }
-
       const { error } = await supabase
         .from('integrations')
         .update({ status: next })
@@ -338,11 +314,6 @@ export default function Integrations() {
 
       if (isBackendTimeout) {
         // Backend environment can't reach external hosts - save config as disconnected
-        if (!supabase) {
-          showToast('Supabase not configured', 'error');
-          return;
-        }
-
         const { error } = await supabase
           .from('integrations')
           .update({
@@ -369,11 +340,6 @@ export default function Integrations() {
       const lastSync = result.success ? 'just now' : undefined;
 
       // Update in database
-      if (!supabase) {
-        showToast('Supabase not configured', 'error');
-        return;
-      }
-
       const { error } = await supabase
         .from('integrations')
         .update({
@@ -402,12 +368,10 @@ export default function Integrations() {
       const errorStatus: IntegrationStatus = 'error';
 
       try {
-        if (supabase) {
-          await supabase
-            .from('integrations')
-            .update({ status: errorStatus })
-            .eq('id', id);
-        }
+        await supabase
+          .from('integrations')
+          .update({ status: errorStatus })
+          .eq('id', id);
       } catch (dbError) {
         console.error('Failed to update status:', dbError);
       }
