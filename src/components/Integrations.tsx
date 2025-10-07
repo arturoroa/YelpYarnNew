@@ -65,28 +65,38 @@ export default function Integrations() {
   }, []);
 
   const fetchIntegrations = async () => {
-    if (!supabase) return;
+    if (supabase) {
+      try {
+        // Use Supabase for data operations
+        const { data, error } = await supabase
+          .from('integrations')
+          .select('*')
+          .order('created_at', { ascending: false });
 
-    try {
-      // Use Supabase directly for data operations
-      const { data, error } = await supabase
-        .from('integrations')
-        .select('*')
-        .order('created_at', { ascending: false });
+        if (error) throw error;
 
-      if (error) throw error;
-
-      setIntegrations((data || []).map((item: any) => ({
-        id: item.id,
-        name: item.name,
-        type: item.type,
-        status: item.status,
-        lastSync: item.last_sync,
-        config: item.config
-      })));
-    } catch (error) {
-      console.error('Error fetching integrations:', error);
-      showToast('Failed to fetch integrations', 'error');
+        setIntegrations((data || []).map((item: any) => ({
+          id: item.id,
+          name: item.name,
+          type: item.type,
+          status: item.status,
+          lastSync: item.last_sync,
+          config: item.config
+        })));
+      } catch (error) {
+        console.error('Error fetching integrations:', error);
+        showToast('Failed to fetch integrations', 'error');
+      }
+    } else {
+      // Fallback to localStorage
+      try {
+        const stored = localStorage.getItem('integrations');
+        if (stored) {
+          setIntegrations(JSON.parse(stored));
+        }
+      } catch (error) {
+        console.error('Error loading from localStorage:', error);
+      }
     }
   };
 
@@ -166,22 +176,32 @@ export default function Integrations() {
       cfg.protocol = 'postgresql';
     }
 
-    if (!supabase) {
-      showToast('Database not configured. Please restart the dev server.', 'error');
-      return;
-    }
-
     try {
-      const { error } = await supabase
-        .from('integrations')
-        .insert({
+      if (supabase) {
+        const { error } = await supabase
+          .from('integrations')
+          .insert({
+            name,
+            type,
+            config: cfg,
+            status: 'disconnected'
+          });
+
+        if (error) throw error;
+      } else {
+        // Use localStorage
+        const newIntegrationData = {
+          id: crypto.randomUUID(),
           name,
           type,
           config: cfg,
-          status: 'disconnected'
-        });
-
-      if (error) throw error;
+          status: 'disconnected' as IntegrationStatus,
+          lastSync: undefined
+        };
+        const updated = [...integrations, newIntegrationData];
+        setIntegrations(updated);
+        localStorage.setItem('integrations', JSON.stringify(updated));
+      }
 
       await fetchIntegrations();
       setNewIntegration({ type: 'database', config: {} });
@@ -194,17 +214,21 @@ export default function Integrations() {
   };
 
   const handleDeleteIntegration = async (id: string) => {
-    if (!supabase) return;
-
     try {
-      const { error } = await supabase
-        .from('integrations')
-        .delete()
-        .eq('id', id);
+      if (supabase) {
+        const { error } = await supabase
+          .from('integrations')
+          .delete()
+          .eq('id', id);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
-      setIntegrations(prev => prev.filter(int => int.id !== id));
+      const updated = integrations.filter(int => int.id !== id);
+      setIntegrations(updated);
+      if (!supabase) {
+        localStorage.setItem('integrations', JSON.stringify(updated));
+      }
       showToast('Integration deleted successfully', 'success');
     } catch (error) {
       console.error('Error deleting integration:', error);
@@ -232,33 +256,39 @@ export default function Integrations() {
     const cfg = { ...(draft.config || {}) };
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
-    if (!supabase) return;
-
     try {
-      const { data, error } = await supabase
-        .from('integrations')
-        .update({
-          name,
-          type,
-          config: cfg,
-          updated_at: new Date().toISOString()
-        })
-        .eq('id', editingId)
-        .select()
-        .single();
+      if (supabase) {
+        const { data, error } = await supabase
+          .from('integrations')
+          .update({
+            name,
+            type,
+            config: cfg,
+            updated_at: new Date().toISOString()
+          })
+          .eq('id', editingId)
+          .select()
+          .single();
 
-      if (error) throw error;
+        if (error) throw error;
 
-      setIntegrations(prev =>
-        prev.map(i => (i.id === editingId ? {
-          id: data.id,
-          name: data.name,
-          type: data.type,
-          status: data.status,
-          lastSync: data.last_sync,
-          config: data.config
-        } : i))
-      );
+        setIntegrations(prev =>
+          prev.map(i => (i.id === editingId ? {
+            id: data.id,
+            name: data.name,
+            type: data.type,
+            status: data.status,
+            lastSync: data.last_sync,
+            config: data.config
+          } : i))
+        );
+      } else {
+        const updated = integrations.map(i =>
+          i.id === editingId ? { ...i, name, type, config: cfg } : i
+        );
+        setIntegrations(updated);
+        localStorage.setItem('integrations', JSON.stringify(updated));
+      }
       cancelEdit();
       showToast('Integration updated successfully', 'success');
     } catch (error) {
@@ -275,19 +305,21 @@ export default function Integrations() {
       integration.status === 'connected' ? 'disconnected' :
       integration.status === 'disconnected' ? 'connected' : 'disconnected';
 
-    if (!supabase) return;
-
     try {
-      const { error } = await supabase
-        .from('integrations')
-        .update({ status: next })
-        .eq('id', id);
+      if (supabase) {
+        const { error } = await supabase
+          .from('integrations')
+          .update({ status: next })
+          .eq('id', id);
 
-      if (error) throw error;
+        if (error) throw error;
+      }
 
-      setIntegrations(prev =>
-        prev.map(i => (i.id === id ? { ...i, status: next } : i))
-      );
+      const updated = integrations.map(i => (i.id === id ? { ...i, status: next } : i));
+      setIntegrations(updated);
+      if (!supabase) {
+        localStorage.setItem('integrations', JSON.stringify(updated));
+      }
       showToast(`Integration ${next === 'connected' ? 'connected' : 'disconnected'}`, 'info');
     } catch (error) {
       console.error('Error updating status:', error);
@@ -330,25 +362,27 @@ export default function Integrations() {
 
       if (isBackendTimeout) {
         // Backend environment can't reach external hosts - save config as disconnected
-        if (!supabase) return;
+        if (supabase) {
+          const { error } = await supabase
+            .from('integrations')
+            .update({
+              status: 'disconnected',
+              last_sync: 'Config saved (not verified)'
+            })
+            .eq('id', id);
 
-        const { error } = await supabase
-          .from('integrations')
-          .update({
-            status: 'disconnected',
-            last_sync: 'Config saved (not verified)'
-          })
-          .eq('id', id);
+          if (error) throw error;
+        }
 
-        if (error) throw error;
-
-        setIntegrations(prev =>
-          prev.map(i =>
-            i.id === id
-              ? { ...i, status: 'disconnected', lastSync: 'Config saved (not verified)' }
-              : i
-          )
+        const updated = integrations.map(i =>
+          i.id === id
+            ? { ...i, status: 'disconnected' as IntegrationStatus, lastSync: 'Config saved (not verified)' }
+            : i
         );
+        setIntegrations(updated);
+        if (!supabase) {
+          localStorage.setItem('integrations', JSON.stringify(updated));
+        }
 
         showToast(`Configuration saved for ${target.name}. Connection testing is unavailable in this environment due to network restrictions, but the configuration will be used when running tests.`, 'info');
         return;
@@ -358,25 +392,27 @@ export default function Integrations() {
       const lastSync = result.success ? 'just now' : undefined;
 
       // Update in database
-      if (!supabase) return;
+      if (supabase) {
+        const { error } = await supabase
+          .from('integrations')
+          .update({
+            status: newStatus,
+            last_sync: lastSync
+          })
+          .eq('id', id);
 
-      const { error } = await supabase
-        .from('integrations')
-        .update({
-          status: newStatus,
-          last_sync: lastSync
-        })
-        .eq('id', id);
+        if (error) throw error;
+      }
 
-      if (error) throw error;
-
-      setIntegrations(prev =>
-        prev.map(i =>
-          i.id === id
-            ? { ...i, status: newStatus, lastSync }
-            : i
-        )
+      const updated = integrations.map(i =>
+        i.id === id
+          ? { ...i, status: newStatus, lastSync }
+          : i
       );
+      setIntegrations(updated);
+      if (!supabase) {
+        localStorage.setItem('integrations', JSON.stringify(updated));
+      }
 
       if (result.success) {
         showToast(result.message || 'Connection successful', 'success');
@@ -394,17 +430,19 @@ export default function Integrations() {
             .update({ status: errorStatus })
             .eq('id', id);
         }
-      } catch (dbError) {
-        console.error('Failed to update status:', dbError);
-      }
 
-      setIntegrations(prev =>
-        prev.map(i =>
+        const updated = integrations.map(i =>
           i.id === id
             ? { ...i, status: errorStatus }
             : i
-        )
-      );
+        );
+        setIntegrations(updated);
+        if (!supabase) {
+          localStorage.setItem('integrations', JSON.stringify(updated));
+        }
+      } catch (dbError) {
+        console.error('Failed to update status:', dbError);
+      }
       showToast(`Connection test failed: ${error instanceof Error ? error.message : 'Unknown error'}`, 'error');
     } finally {
       setBusyFor(id, false);
