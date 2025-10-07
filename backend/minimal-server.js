@@ -1,13 +1,13 @@
 import express from 'express';
 import cors from 'cors';
 import puppeteer from 'puppeteer';
-import { createClient } from '@supabase/supabase-js';
 import dotenv from 'dotenv';
 import pg from 'pg';
 import mysql from 'mysql2/promise.js';
 import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createRequire } from 'module';
+import { AppDatabase } from './database/AppDatabase.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -19,16 +19,24 @@ const Database = require('better-sqlite3');
 
 dotenv.config();
 
-let supabase;
-try {
-  supabase = createClient(
-    process.env.VITE_SUPABASE_URL,
-    process.env.VITE_SUPABASE_ANON_KEY
-  );
-  console.log('Supabase client initialized');
-} catch (error) {
-  console.error('Failed to initialize Supabase client:', error.message);
-  process.exit(1);
+// Initialize SQLite database as default storage
+const appDb = new AppDatabase();
+
+// Supabase is now optional - only initialize if credentials are provided
+let supabase = null;
+if (process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY) {
+  try {
+    const { createClient } = await import('@supabase/supabase-js');
+    supabase = createClient(
+      process.env.VITE_SUPABASE_URL,
+      process.env.VITE_SUPABASE_ANON_KEY
+    );
+    console.log('✓ Supabase client initialized (optional)');
+  } catch (error) {
+    console.log('! Supabase not configured (optional)');
+  }
+} else {
+  console.log('! Supabase not configured - using SQLite only');
 }
 
 // Crear aplicación Express
@@ -53,13 +61,8 @@ app.get('/api/status', (req, res) => {
 // CRUD Endpoints for Integrations
 app.get('/api/integrations', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('integrations')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    res.json(data);
+    const integrations = appDb.getAllIntegrations();
+    res.json(integrations);
   } catch (error) {
     console.error('Error fetching integrations:', error);
     res.status(500).json({ error: error.message });
@@ -74,19 +77,14 @@ app.post('/api/integrations', async (req, res) => {
       return res.status(400).json({ error: 'Name and type are required' });
     }
 
-    const { data, error } = await supabase
-      .from('integrations')
-      .insert([{
-        name,
-        type,
-        status: 'disconnected',
-        config: config || {}
-      }])
-      .select()
-      .single();
+    const integration = appDb.createIntegration({
+      name,
+      type,
+      status: 'disconnected',
+      config: config || {}
+    });
 
-    if (error) throw error;
-    res.status(201).json(data);
+    res.status(201).json(integration);
   } catch (error) {
     console.error('Error creating integration:', error);
     res.status(500).json({ error: error.message });
@@ -98,25 +96,15 @@ app.put('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     const { name, type, config, status, last_sync } = req.body;
 
-    const updateData = {
-      updated_at: new Date().toISOString()
-    };
-
+    const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (type !== undefined) updateData.type = type;
     if (config !== undefined) updateData.config = config;
     if (status !== undefined) updateData.status = status;
     if (last_sync !== undefined) updateData.last_sync = last_sync;
 
-    const { data, error } = await supabase
-      .from('integrations')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) throw error;
-    res.json(data);
+    const integration = appDb.updateIntegration(id, updateData);
+    res.json(integration);
   } catch (error) {
     console.error('Error updating integration:', error);
     res.status(500).json({ error: error.message });
@@ -128,18 +116,13 @@ app.delete('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     console.log('Deleting integration with id:', id);
 
-    const { data, error } = await supabase
-      .from('integrations')
-      .delete()
-      .eq('id', id)
-      .select();
+    const deleted = appDb.deleteIntegration(id);
 
-    if (error) {
-      console.error('Supabase error:', error);
-      throw error;
+    if (!deleted) {
+      return res.status(404).json({ error: 'Integration not found' });
     }
 
-    console.log('Successfully deleted integration:', data);
+    console.log('Successfully deleted integration');
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting integration:', error);
@@ -691,13 +674,8 @@ app.get('/api/logs/system/recent', async (req, res) => {
 // Test session endpoints
 app.get('/api/tests/sessions', async (req, res) => {
   try {
-    const { data, error } = await supabase
-      .from('test_sessions')
-      .select('*')
-      .order('created_at', { ascending: false });
-
-    if (error) throw error;
-    res.json(data || []);
+    const sessions = appDb.getAllTestSessions();
+    res.json(sessions || []);
   } catch (error) {
     console.error('Error fetching test sessions:', error);
     res.status(500).json({ error: 'Failed to fetch test sessions' });
@@ -707,14 +685,8 @@ app.get('/api/tests/sessions', async (req, res) => {
 app.post('/api/tests/start', async (req, res) => {
   try {
     const sessionData = req.body;
-    const { data, error } = await supabase
-      .from('test_sessions')
-      .insert([sessionData])
-      .select()
-      .single();
-
-    if (error) throw error;
-    res.json(data);
+    const session = appDb.createTestSession(sessionData);
+    res.json(session);
   } catch (error) {
     console.error('Error starting test session:', error);
     res.status(500).json({ error: 'Failed to start test session' });
@@ -724,14 +696,11 @@ app.post('/api/tests/start', async (req, res) => {
 app.get('/api/tests/session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { data, error } = await supabase
-      .from('test_sessions')
-      .select('*')
-      .eq('session_id', sessionId)
-      .single();
-
-    if (error) throw error;
-    res.json(data);
+    const session = appDb.getTestSession(sessionId);
+    if (!session) {
+      return res.status(404).json({ error: 'Test session not found' });
+    }
+    res.json(session);
   } catch (error) {
     console.error('Error fetching test session:', error);
     res.status(500).json({ error: 'Failed to fetch test session' });
@@ -741,15 +710,11 @@ app.get('/api/tests/session/:sessionId', async (req, res) => {
 app.post('/api/tests/stop/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const { data, error } = await supabase
-      .from('test_sessions')
-      .update({ status: 'stopped', ended_at: new Date().toISOString() })
-      .eq('session_id', sessionId)
-      .select()
-      .single();
-
-    if (error) throw error;
-    res.json(data);
+    const session = appDb.updateTestSession(sessionId, {
+      status: 'stopped',
+      completed_at: new Date().toISOString()
+    });
+    res.json(session);
   } catch (error) {
     console.error('Error stopping test session:', error);
     res.status(500).json({ error: 'Failed to stop test session' });
@@ -760,14 +725,8 @@ app.post('/api/tests/stop/:sessionId', async (req, res) => {
 app.get('/api/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const { data, error } = await supabase
-      .from('yelp_users')
-      .select('*')
-      .eq('id', userId)
-      .maybeSingle();
-
-    if (error) throw error;
-    res.json(data);
+    const user = appDb.getYelpUser(userId);
+    res.json(user || null);
   } catch (error) {
     console.error('Error fetching user:', error);
     res.status(500).json({ error: 'Failed to fetch user' });
@@ -777,14 +736,8 @@ app.get('/api/users/:userId', async (req, res) => {
 app.get('/api/users/check/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const { data, error } = await supabase
-      .from('yelp_users')
-      .select('*')
-      .eq('username', username)
-      .maybeSingle();
-
-    if (error) throw error;
-    res.json({ exists: !!data, user: data });
+    const user = appDb.getYelpUserByUsername(username);
+    res.json({ exists: !!user, user: user || null });
   } catch (error) {
     console.error('Error checking user:', error);
     res.status(500).json({ error: 'Failed to check user' });
@@ -794,14 +747,8 @@ app.get('/api/users/check/:username', async (req, res) => {
 app.post('/api/users/create', async (req, res) => {
   try {
     const userData = req.body;
-    const { data, error } = await supabase
-      .from('yelp_users')
-      .insert([userData])
-      .select()
-      .single();
-
-    if (error) throw error;
-    res.json(data);
+    const user = appDb.createYelpUser(userData);
+    res.json(user);
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user' });
