@@ -176,17 +176,92 @@ app.post('/api/integrations/test-connection', async (req, res) => {
 });
 
 async function testDatabaseConnection(config, res) {
-  const { host, port, database, username, password, protocol } = config;
+  const { host, port, database, username, password, protocol, connectionMethod, apiToken } = config;
   const dbProtocol = (protocol || 'postgresql').toLowerCase();
+  const connMethod = connectionMethod || 'on-prem';
 
-  if (!host && dbProtocol !== 'sqlite') {
+  // Handle SQLite
+  if (connMethod === 'sqlite' || dbProtocol === 'sqlite') {
+    if (!database) {
+      return res.json({
+        success: false,
+        error: 'Database name is required for SQLite'
+      });
+    }
+
+    if (!Database) {
+      return res.json({
+        success: false,
+        error: 'SQLite support not available in this environment. better-sqlite3 module could not be loaded.'
+      });
+    }
+
+    try {
+      // Create the file path in the project root
+      const path = await import('path');
+      const { fileURLToPath } = await import('url');
+      const __dirname = path.dirname(fileURLToPath(import.meta.url));
+      const projectRoot = path.resolve(__dirname, '..');
+
+      // Ensure database name ends with .db or .sqlite
+      let dbFileName = database;
+      if (!dbFileName.endsWith('.db') && !dbFileName.endsWith('.sqlite')) {
+        dbFileName += '.sqlite';
+      }
+
+      const filePath = path.join(projectRoot, dbFileName);
+
+      let db;
+      let wasCreated = false;
+
+      try {
+        db = new Database(filePath, { readonly: true, fileMustExist: true });
+      } catch (openErr) {
+        if (openErr.code === 'SQLITE_CANTOPEN' || openErr.message.includes('ENOENT') || openErr.message.includes('does not exist')) {
+          db = new Database(filePath);
+          wasCreated = true;
+        } else {
+          throw openErr;
+        }
+      }
+
+      const result = db.prepare('SELECT 1 as test').get();
+      db.close();
+
+      return res.json({
+        success: true,
+        message: wasCreated
+          ? `SQLite database created and connected successfully at ${dbFileName}`
+          : `Successfully connected to SQLite database at ${dbFileName}`
+      });
+    } catch (err) {
+      console.error('SQLite connection error:', err);
+      let errorMsg = err.message;
+
+      if (err.message.includes('not a database')) {
+        errorMsg = `File is not a valid SQLite database`;
+      } else if (err.code === 'EACCES') {
+        errorMsg = `Permission denied accessing database file`;
+      } else {
+        errorMsg = `Failed to connect to SQLite database: ${err.message}`;
+      }
+
+      return res.json({
+        success: false,
+        error: errorMsg
+      });
+    }
+  }
+
+  // For non-SQLite connections, require host
+  if (!host) {
     return res.json({
       success: false,
       error: 'Host is required'
     });
   }
 
-  const actualPort = parseInt(port) || 5432;
+  const actualPort = parseInt(port) || (dbProtocol.includes('mysql') ? 3306 : 5432);
   const timeout = parseInt(config.timeout) || 15000;
 
   try {
@@ -276,68 +351,6 @@ async function testDatabaseConnection(config, res) {
             code: err.code,
             errno: err.errno,
             sqlState: err.sqlState
-          }
-        });
-      }
-    } else if (dbProtocol === 'sqlite') {
-      const { filePath } = config;
-
-      if (!filePath) {
-        return res.json({
-          success: false,
-          error: 'File path is required for SQLite'
-        });
-      }
-
-      if (!Database) {
-        return res.json({
-          success: false,
-          error: 'SQLite support not available in this environment. better-sqlite3 module could not be loaded.'
-        });
-      }
-
-      try {
-        let db;
-        let wasCreated = false;
-
-        try {
-          db = new Database(filePath, { readonly: true, fileMustExist: true });
-        } catch (openErr) {
-          if (openErr.code === 'SQLITE_CANTOPEN' || openErr.message.includes('ENOENT')) {
-            db = new Database(filePath);
-            wasCreated = true;
-          } else {
-            throw openErr;
-          }
-        }
-
-        const result = db.prepare('SELECT 1 as test').get();
-        db.close();
-
-        return res.json({
-          success: true,
-          message: wasCreated
-            ? `SQLite database created and connected successfully at ${filePath}`
-            : `Successfully connected to SQLite database at ${filePath}`
-        });
-      } catch (err) {
-        console.error('SQLite connection error:', err);
-        let errorMsg = err.message;
-
-        if (err.message.includes('not a database')) {
-          errorMsg = `File at ${filePath} is not a valid SQLite database`;
-        } else if (err.code === 'EACCES') {
-          errorMsg = `Permission denied accessing ${filePath}`;
-        } else {
-          errorMsg = `Failed to connect to SQLite database: ${err.message}`;
-        }
-
-        return res.json({
-          success: false,
-          error: errorMsg,
-          details: {
-            code: err.code,
-            errno: err.errno
           }
         });
       }

@@ -32,6 +32,8 @@ interface Integration {
     username?: string;
     password?: string;
     protocol?: string;
+    connectionMethod?: string;
+    apiToken?: string;
     country?: string;
     region?: string;
     city?: string;
@@ -65,6 +67,11 @@ export default function Integrations() {
 
   const fetchIntegrations = async () => {
     try {
+      if (!supabase) {
+        console.warn('Supabase not configured, skipping fetch');
+        return;
+      }
+
       // Use Supabase directly for data operations
       const { data, error } = await supabase
         .from('integrations')
@@ -158,32 +165,12 @@ export default function Integrations() {
     const cfg = { ...(newIntegration.config || {}) };
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
-    // For SQLite, create the database file automatically
-    if (type === 'database' && cfg.protocol === 'sqlite' && cfg.databaseName) {
-      const dbName = cfg.databaseName.trim();
-      const filePath = `/tmp/cc-agent/57989374/project/${dbName}.sqlite`;
-      cfg.filePath = filePath;
-      delete cfg.databaseName;
-
-      // Create the SQLite database
-      try {
-        const response = await fetch('/api/integrations/test-connection', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ type: 'database', config: { protocol: 'sqlite', filePath } })
-        });
-        const result = await response.json();
-        if (!result.success) {
-          showToast(`Failed to create database: ${result.error}`, 'error');
-          return;
-        }
-      } catch (err) {
-        showToast('Failed to create SQLite database', 'error');
+    try {
+      if (!supabase) {
+        showToast('Supabase not configured', 'error');
         return;
       }
-    }
 
-    try {
       const { error } = await supabase
         .from('integrations')
         .insert({
@@ -207,6 +194,11 @@ export default function Integrations() {
 
   const handleDeleteIntegration = async (id: string) => {
     try {
+      if (!supabase) {
+        showToast('Supabase not configured', 'error');
+        return;
+      }
+
       const { error } = await supabase
         .from('integrations')
         .delete()
@@ -243,6 +235,11 @@ export default function Integrations() {
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
     try {
+      if (!supabase) {
+        showToast('Supabase not configured', 'error');
+        return;
+      }
+
       const { data, error } = await supabase
         .from('integrations')
         .update({
@@ -284,6 +281,11 @@ export default function Integrations() {
       integration.status === 'disconnected' ? 'connected' : 'disconnected';
 
     try {
+      if (!supabase) {
+        showToast('Supabase not configured', 'error');
+        return;
+      }
+
       const { error } = await supabase
         .from('integrations')
         .update({ status: next })
@@ -336,6 +338,11 @@ export default function Integrations() {
 
       if (isBackendTimeout) {
         // Backend environment can't reach external hosts - save config as disconnected
+        if (!supabase) {
+          showToast('Supabase not configured', 'error');
+          return;
+        }
+
         const { error } = await supabase
           .from('integrations')
           .update({
@@ -362,6 +369,11 @@ export default function Integrations() {
       const lastSync = result.success ? 'just now' : undefined;
 
       // Update in database
+      if (!supabase) {
+        showToast('Supabase not configured', 'error');
+        return;
+      }
+
       const { error } = await supabase
         .from('integrations')
         .update({
@@ -390,10 +402,12 @@ export default function Integrations() {
       const errorStatus: IntegrationStatus = 'error';
 
       try {
-        await supabase
-          .from('integrations')
-          .update({ status: errorStatus })
-          .eq('id', id);
+        if (supabase) {
+          await supabase
+            .from('integrations')
+            .update({ status: errorStatus })
+            .eq('id', id);
+        }
       } catch (dbError) {
         console.error('Failed to update status:', dbError);
       }
@@ -803,40 +817,140 @@ export default function Integrations() {
               {newIntegration.type === 'database' && (
                 <>
                   <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-1">Protocol</label>
+                    <label className="block text-sm font-medium text-gray-700 mb-1">Connection Method</label>
                     <select
-                      value={newIntegration.config?.protocol || 'postgresql'}
+                      value={newIntegration.config?.connectionMethod || 'on-prem'}
                       onChange={(e) =>
                         setNewIntegration(prev => ({
                           ...prev,
-                          config: { ...(prev.config || {}), protocol: e.target.value }
+                          config: { ...(prev.config || {}), connectionMethod: e.target.value }
                         }))
                       }
                       className="w-full border border-gray-300 rounded-md px-3 py-2"
                     >
-                      <option value="postgresql">PostgreSQL</option>
-                      <option value="mysql">MySQL</option>
+                      <option value="on-prem">On-Premise</option>
+                      <option value="api-token">API/Token</option>
                       <option value="sqlite">SQLite</option>
                     </select>
                   </div>
-                  {newIntegration.config?.protocol === 'sqlite' ? (
+                  {newIntegration.config?.connectionMethod === 'sqlite' ? (
                     <div>
                       <label className="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
                       <input
                         type="text"
-                        value={newIntegration.config?.databaseName || ''}
+                        value={newIntegration.config?.database || ''}
                         onChange={(e) =>
                           setNewIntegration(prev => ({
                             ...prev,
-                            config: { ...(prev.config || {}), databaseName: e.target.value }
+                            config: { ...(prev.config || {}), database: e.target.value }
                           }))
                         }
                         className="w-full border border-gray-300 rounded-md px-3 py-2"
-                        placeholder="mydatabase"
+                        placeholder="mydatabase.db"
                       />
                     </div>
+                  ) : newIntegration.config?.connectionMethod === 'api-token' ? (
+                    <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Database Type</label>
+                        <select
+                          value={newIntegration.config?.protocol || 'postgresql'}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), protocol: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                        >
+                          <option value="postgresql">PostgreSQL</option>
+                          <option value="mysql">MySQL</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
+                        <input
+                          type="text"
+                          value={newIntegration.config?.host || ''}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), host: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="db.example.com"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Port</label>
+                        <input
+                          type="number"
+                          value={
+                            typeof newIntegration.config?.port === 'number' &&
+                            Number.isFinite(newIntegration.config.port)
+                              ? newIntegration.config.port
+                              : ''
+                          }
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), port: parsePort(e.target.value) }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="5432"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Database Name</label>
+                        <input
+                          type="text"
+                          value={newIntegration.config?.database || ''}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), database: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="yelp_test"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">API Key / Token</label>
+                        <input
+                          type="password"
+                          value={newIntegration.config?.apiToken || ''}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), apiToken: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                          placeholder="Enter API key or token"
+                        />
+                      </div>
+                    </>
                   ) : (
                     <>
+                      <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Database Type</label>
+                        <select
+                          value={newIntegration.config?.protocol || 'postgresql'}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), protocol: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                        >
+                          <option value="postgresql">PostgreSQL</option>
+                          <option value="mysql">MySQL</option>
+                        </select>
+                      </div>
                       <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
                         <input
