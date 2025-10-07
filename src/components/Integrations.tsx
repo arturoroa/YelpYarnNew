@@ -960,6 +960,22 @@ export default function Integrations() {
                   ) : (
                     <>
                       <div>
+                        <label className="block text-sm font-medium text-gray-700 mb-1">Database Type</label>
+                        <select
+                          value={newIntegration.config?.protocol || 'postgresql'}
+                          onChange={(e) =>
+                            setNewIntegration(prev => ({
+                              ...prev,
+                              config: { ...(prev.config || {}), protocol: e.target.value }
+                            }))
+                          }
+                          className="w-full border border-gray-300 rounded-md px-3 py-2"
+                        >
+                          <option value="postgresql">PostgreSQL</option>
+                          <option value="mysql">MySQL</option>
+                        </select>
+                      </div>
+                      <div>
                         <label className="block text-sm font-medium text-gray-700 mb-1">Host</label>
                         <input
                           type="text"
