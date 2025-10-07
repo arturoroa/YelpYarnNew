@@ -1,282 +1,198 @@
-import { createRequire } from 'module';
-import { join, dirname } from 'path';
-import { fileURLToPath } from 'url';
 import { randomUUID } from 'crypto';
-
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const projectRoot = join(__dirname, '../..');
-
-// Load better-sqlite3 from project root
-const require = createRequire(join(projectRoot, 'package.json'));
-const Database = require('better-sqlite3');
 
 /**
  * Application database abstraction layer
- * Uses SQLite as default storage
+ * Uses in-memory storage (works in all environments)
+ * Can be replaced with SQLite in Node.js environments
  */
 export class AppDatabase {
-  constructor(dbPath = join(projectRoot, 'app_data.sqlite')) {
-    this.db = new Database(dbPath);
-    this.initializeTables();
-    console.log('✓ Application database initialized:', dbPath);
+  constructor() {
+    // In-memory storage
+    this.integrations = new Map();
+    this.testSessions = new Map();
+    this.yelpUsers = new Map();
+
+    this.initializeSampleData();
+    console.log('✓ Application database initialized (in-memory)');
   }
 
-  initializeTables() {
-    // Integrations table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS integrations (
-        id TEXT PRIMARY KEY,
-        name TEXT NOT NULL,
-        type TEXT NOT NULL,
-        config TEXT NOT NULL,
-        status TEXT DEFAULT 'disconnected',
-        last_sync TEXT,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+  initializeSampleData() {
+    // Add sample Yelp users
+    const sampleUsers = [
+      {
+        id: '1',
+        username: 'john_doe_yelp',
+        email: 'john@example.com',
+        config: { cookies: [{ name: 'session', value: 'abc123' }] },
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        id: '2',
+        username: 'jane_smith_yelp',
+        email: 'jane@example.com',
+        config: { cookies: [{ name: 'session', value: 'def456' }] },
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      },
+      {
+        id: '3',
+        username: 'test_user_yelp',
+        email: 'test@example.com',
+        config: { cookies: [{ name: 'session', value: 'ghi789' }] },
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
+      }
+    ];
 
-    // Test sessions table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS test_sessions (
-        id TEXT PRIMARY KEY,
-        test_name TEXT NOT NULL,
-        status TEXT DEFAULT 'pending',
-        started_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        completed_at TEXT,
-        result TEXT,
-        logs TEXT,
-        user_id TEXT
-      );
-    `);
-
-    // Yelp users table
-    this.db.exec(`
-      CREATE TABLE IF NOT EXISTS yelp_users (
-        id TEXT PRIMARY KEY,
-        username TEXT NOT NULL UNIQUE,
-        email TEXT NOT NULL,
-        config TEXT,
-        is_active INTEGER DEFAULT 1,
-        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-      );
-    `);
+    sampleUsers.forEach(user => {
+      this.yelpUsers.set(user.id, user);
+    });
   }
 
   // ===== INTEGRATIONS =====
 
   getAllIntegrations() {
-    const stmt = this.db.prepare('SELECT * FROM integrations ORDER BY created_at DESC');
-    const rows = stmt.all();
-    return rows.map(row => ({
-      ...row,
-      config: JSON.parse(row.config)
-    }));
+    const integrations = Array.from(this.integrations.values());
+    return integrations.sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }
 
   getIntegration(id) {
-    const stmt = this.db.prepare('SELECT * FROM integrations WHERE id = ?');
-    const row = stmt.get(id);
-    if (row) {
-      row.config = JSON.parse(row.config);
-    }
-    return row;
+    return this.integrations.get(id) || null;
   }
 
   createIntegration({ name, type, config, status = 'disconnected' }) {
     const id = randomUUID();
-    const stmt = this.db.prepare(`
-      INSERT INTO integrations (id, name, type, config, status)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+    const integration = {
+      id,
+      name,
+      type,
+      config: config || {},
+      status,
+      last_sync: null,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
-    stmt.run(id, name, type, JSON.stringify(config || {}), status);
-    return this.getIntegration(id);
+    this.integrations.set(id, integration);
+    return integration;
   }
 
   updateIntegration(id, updates) {
-    const fields = [];
-    const values = [];
+    const integration = this.integrations.get(id);
+    if (!integration) return null;
 
-    if (updates.name !== undefined) {
-      fields.push('name = ?');
-      values.push(updates.name);
-    }
-    if (updates.type !== undefined) {
-      fields.push('type = ?');
-      values.push(updates.type);
-    }
-    if (updates.config !== undefined) {
-      fields.push('config = ?');
-      values.push(JSON.stringify(updates.config));
-    }
-    if (updates.status !== undefined) {
-      fields.push('status = ?');
-      values.push(updates.status);
-    }
-    if (updates.last_sync !== undefined) {
-      fields.push('last_sync = ?');
-      values.push(updates.last_sync);
-    }
+    const updated = {
+      ...integration,
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
 
-    fields.push('updated_at = ?');
-    values.push(new Date().toISOString());
-    values.push(id);
-
-    const stmt = this.db.prepare(`
-      UPDATE integrations SET ${fields.join(', ')} WHERE id = ?
-    `);
-    stmt.run(...values);
-    return this.getIntegration(id);
+    this.integrations.set(id, updated);
+    return updated;
   }
 
   deleteIntegration(id) {
-    const stmt = this.db.prepare('DELETE FROM integrations WHERE id = ?');
-    const result = stmt.run(id);
-    return result.changes > 0;
+    return this.integrations.delete(id);
   }
 
   // ===== TEST SESSIONS =====
 
   getAllTestSessions() {
-    const stmt = this.db.prepare('SELECT * FROM test_sessions ORDER BY started_at DESC');
-    const rows = stmt.all();
-    return rows.map(row => ({
-      ...row,
-      result: row.result ? JSON.parse(row.result) : null,
-      logs: row.logs ? JSON.parse(row.logs) : null
-    }));
+    const sessions = Array.from(this.testSessions.values());
+    return sessions.sort((a, b) =>
+      new Date(b.started_at).getTime() - new Date(a.started_at).getTime()
+    );
   }
 
   getTestSession(id) {
-    const stmt = this.db.prepare('SELECT * FROM test_sessions WHERE id = ?');
-    const row = stmt.get(id);
-    if (row) {
-      row.result = row.result ? JSON.parse(row.result) : null;
-      row.logs = row.logs ? JSON.parse(row.logs) : null;
-    }
-    return row;
+    return this.testSessions.get(id) || null;
   }
 
   createTestSession({ test_name, user_id, status = 'pending' }) {
     const id = randomUUID();
-    const stmt = this.db.prepare(`
-      INSERT INTO test_sessions (id, test_name, status, user_id)
-      VALUES (?, ?, ?, ?)
-    `);
+    const session = {
+      id,
+      test_name,
+      status,
+      user_id: user_id || null,
+      started_at: new Date().toISOString(),
+      completed_at: null,
+      result: null,
+      logs: null
+    };
 
-    stmt.run(id, test_name, status, user_id || null);
-    return this.getTestSession(id);
+    this.testSessions.set(id, session);
+    return session;
   }
 
   updateTestSession(id, updates) {
-    const fields = [];
-    const values = [];
+    const session = this.testSessions.get(id);
+    if (!session) return null;
 
-    if (updates.status !== undefined) {
-      fields.push('status = ?');
-      values.push(updates.status);
-    }
-    if (updates.completed_at !== undefined) {
-      fields.push('completed_at = ?');
-      values.push(updates.completed_at);
-    }
-    if (updates.result !== undefined) {
-      fields.push('result = ?');
-      values.push(JSON.stringify(updates.result));
-    }
-    if (updates.logs !== undefined) {
-      fields.push('logs = ?');
-      values.push(JSON.stringify(updates.logs));
-    }
+    const updated = {
+      ...session,
+      ...updates
+    };
 
-    values.push(id);
-
-    const stmt = this.db.prepare(`
-      UPDATE test_sessions SET ${fields.join(', ')} WHERE id = ?
-    `);
-    stmt.run(...values);
-    return this.getTestSession(id);
+    this.testSessions.set(id, updated);
+    return updated;
   }
 
   // ===== YELP USERS =====
 
   getAllYelpUsers() {
-    const stmt = this.db.prepare('SELECT * FROM yelp_users ORDER BY created_at DESC');
-    const rows = stmt.all();
-    return rows.map(row => ({
-      ...row,
-      config: row.config ? JSON.parse(row.config) : null,
-      is_active: row.is_active === 1
-    }));
+    const users = Array.from(this.yelpUsers.values());
+    return users.sort((a, b) =>
+      new Date(b.created_at).getTime() - new Date(a.created_at).getTime()
+    );
   }
 
   getYelpUser(id) {
-    const stmt = this.db.prepare('SELECT * FROM yelp_users WHERE id = ?');
-    const row = stmt.get(id);
-    if (row) {
-      row.config = row.config ? JSON.parse(row.config) : null;
-      row.is_active = row.is_active === 1;
-    }
-    return row;
+    return this.yelpUsers.get(id) || null;
   }
 
   getYelpUserByUsername(username) {
-    const stmt = this.db.prepare('SELECT * FROM yelp_users WHERE username = ?');
-    const row = stmt.get(username);
-    if (row) {
-      row.config = row.config ? JSON.parse(row.config) : null;
-      row.is_active = row.is_active === 1;
-    }
-    return row;
+    const users = Array.from(this.yelpUsers.values());
+    return users.find(user => user.username === username) || null;
   }
 
   createYelpUser({ username, email, config, is_active = true }) {
     const id = randomUUID();
-    const stmt = this.db.prepare(`
-      INSERT INTO yelp_users (id, username, email, config, is_active)
-      VALUES (?, ?, ?, ?, ?)
-    `);
+    const user = {
+      id,
+      username,
+      email,
+      config: config || {},
+      is_active,
+      created_at: new Date().toISOString(),
+      updated_at: new Date().toISOString()
+    };
 
-    stmt.run(id, username, email, JSON.stringify(config || {}), is_active ? 1 : 0);
-    return this.getYelpUser(id);
+    this.yelpUsers.set(id, user);
+    return user;
   }
 
   updateYelpUser(id, updates) {
-    const fields = [];
-    const values = [];
+    const user = this.yelpUsers.get(id);
+    if (!user) return null;
 
-    if (updates.username !== undefined) {
-      fields.push('username = ?');
-      values.push(updates.username);
-    }
-    if (updates.email !== undefined) {
-      fields.push('email = ?');
-      values.push(updates.email);
-    }
-    if (updates.config !== undefined) {
-      fields.push('config = ?');
-      values.push(JSON.stringify(updates.config));
-    }
-    if (updates.is_active !== undefined) {
-      fields.push('is_active = ?');
-      values.push(updates.is_active ? 1 : 0);
-    }
+    const updated = {
+      ...user,
+      ...updates,
+      updated_at: new Date().toISOString()
+    };
 
-    fields.push('updated_at = ?');
-    values.push(new Date().toISOString());
-    values.push(id);
-
-    const stmt = this.db.prepare(`
-      UPDATE yelp_users SET ${fields.join(', ')} WHERE id = ?
-    `);
-    stmt.run(...values);
-    return this.getYelpUser(id);
+    this.yelpUsers.set(id, updated);
+    return updated;
   }
 
   close() {
-    this.db.close();
+    // No-op for in-memory database
   }
 }

@@ -13,13 +13,21 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '..');
 
-// Create require from project root to load better-sqlite3 correctly
+// Create require for loading native modules (like better-sqlite3 if available)
 const require = createRequire(join(projectRoot, 'package.json'));
-const Database = require('better-sqlite3');
+
+// Try to load better-sqlite3 for database connections (optional)
+let Database = null;
+try {
+  Database = require('better-sqlite3');
+  console.log('✓ better-sqlite3 loaded (for SQLite connections)');
+} catch (err) {
+  console.log('! better-sqlite3 not available (SQLite connections disabled)');
+}
 
 dotenv.config();
 
-// Initialize SQLite database as default storage
+// Initialize in-memory database as default storage
 const appDb = new AppDatabase();
 
 // Supabase is now optional - only initialize if credentials are provided
@@ -278,6 +286,13 @@ async function testDatabaseConnection(config, res) {
         return res.json({
           success: false,
           error: 'File path is required for SQLite'
+        });
+      }
+
+      if (!Database) {
+        return res.json({
+          success: false,
+          error: 'SQLite support not available in this environment. better-sqlite3 module could not be loaded.'
         });
       }
 

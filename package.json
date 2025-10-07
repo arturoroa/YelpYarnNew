@@ -28,6 +28,7 @@
     "puppeteer": "^22.0.0",
     "react": "^19.2.0",
     "react-dom": "^19.2.0",
+    "sql.js": "^1.13.0",
     "winston": "^3.11.0"
   },
   "devDependencies": {
