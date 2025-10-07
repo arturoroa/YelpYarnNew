@@ -2,10 +2,13 @@ import React, { useEffect, useState } from 'react';
 import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
 import { createClient } from '@supabase/supabase-js';
 
-const supabase = createClient(
-  import.meta.env.VITE_SUPABASE_URL,
-  import.meta.env.VITE_SUPABASE_ANON_KEY
-);
+// Make Supabase optional
+const supabase = (import.meta.env.VITE_SUPABASE_URL && import.meta.env.VITE_SUPABASE_ANON_KEY)
+  ? createClient(
+      import.meta.env.VITE_SUPABASE_URL,
+      import.meta.env.VITE_SUPABASE_ANON_KEY
+    )
+  : null;
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
