@@ -5,11 +5,16 @@ import { createClient } from '@supabase/supabase-js';
 const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
 const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
 
-if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Supabase configuration is missing. Please check your environment variables.');
-}
+console.log('Supabase config check:', {
+  hasUrl: !!supabaseUrl,
+  hasKey: !!supabaseKey,
+  urlLength: supabaseUrl?.length,
+  keyLength: supabaseKey?.length
+});
 
-const supabase = createClient(supabaseUrl, supabaseKey);
+const supabase = (supabaseUrl && supabaseKey)
+  ? createClient(supabaseUrl, supabaseKey)
+  : null;
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -67,6 +72,8 @@ export default function Integrations() {
   }, []);
 
   const fetchIntegrations = async () => {
+    if (!supabase) return;
+
     try {
       // Use Supabase directly for data operations
       const { data, error } = await supabase
@@ -161,6 +168,8 @@ export default function Integrations() {
     const cfg = { ...(newIntegration.config || {}) };
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
+    if (!supabase) return;
+
     try {
       const { error } = await supabase
         .from('integrations')
@@ -184,6 +193,8 @@ export default function Integrations() {
   };
 
   const handleDeleteIntegration = async (id: string) => {
+    if (!supabase) return;
+
     try {
       const { error } = await supabase
         .from('integrations')
@@ -219,6 +230,8 @@ export default function Integrations() {
 
     const cfg = { ...(draft.config || {}) };
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
+
+    if (!supabase) return;
 
     try {
       const { data, error } = await supabase
@@ -260,6 +273,8 @@ export default function Integrations() {
     const next: IntegrationStatus =
       integration.status === 'connected' ? 'disconnected' :
       integration.status === 'disconnected' ? 'connected' : 'disconnected';
+
+    if (!supabase) return;
 
     try {
       const { error } = await supabase
@@ -314,6 +329,8 @@ export default function Integrations() {
 
       if (isBackendTimeout) {
         // Backend environment can't reach external hosts - save config as disconnected
+        if (!supabase) return;
+
         const { error } = await supabase
           .from('integrations')
           .update({
@@ -340,6 +357,8 @@ export default function Integrations() {
       const lastSync = result.success ? 'just now' : undefined;
 
       // Update in database
+      if (!supabase) return;
+
       const { error } = await supabase
         .from('integrations')
         .update({
@@ -368,10 +387,12 @@ export default function Integrations() {
       const errorStatus: IntegrationStatus = 'error';
 
       try {
-        await supabase
-          .from('integrations')
-          .update({ status: errorStatus })
-          .eq('id', id);
+        if (supabase) {
+          await supabase
+            .from('integrations')
+            .update({ status: errorStatus })
+            .eq('id', id);
+        }
       } catch (dbError) {
         console.error('Failed to update status:', dbError);
       }
