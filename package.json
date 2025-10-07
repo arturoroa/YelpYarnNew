@@ -5,6 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "concurrently    \"npm run dev:frontend\"  \"node -e \\\"setTimeout(()=>{},10000)\\\" && npm run dev:minimal-backend\" ",
+    "dev:local": "concurrently    \"npm run dev:frontend\"  \"npm run dev:minimal-backend\" ",
     "dev:frontend": "vite",
     "dev:minimal-backend": "node backend/minimal-server.js",
     "dev:backend": "nodemon --watch backend --ext ts --exec \"npm run build:backend && node backend/dist/server.js\"",
