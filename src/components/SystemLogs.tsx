@@ -17,6 +17,7 @@ export default function SystemLogs() {
   const [filter, setFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
+  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchSystemLogs();
@@ -26,10 +27,20 @@ export default function SystemLogs() {
   }, []);
 
   const fetchSystemLogs = async () => {
+    // Save current scroll position
+    const scrollPosition = scrollContainerRef.current?.scrollTop || 0;
+
     setLoading(true);
     try {
       const data = await apiGet<SystemLog[]>('/api/system-logs');
       setLogs(data);
+
+      // Restore scroll position after state update
+      setTimeout(() => {
+        if (scrollContainerRef.current) {
+          scrollContainerRef.current.scrollTop = scrollPosition;
+        }
+      }, 0);
     } catch (error) {
       console.error('Failed to fetch system logs:', error);
     } finally {
@@ -217,7 +228,7 @@ export default function SystemLogs() {
           </div>
         </div>
 
-        <div className="max-h-96 overflow-y-auto">
+        <div ref={scrollContainerRef} className="max-h-96 overflow-y-auto">
           {loading ? (
             <div className="flex items-center justify-center h-32">
               <div className="animate-spin rounded-full h-6 w-6 border-b-2 border-blue-600"></div>
