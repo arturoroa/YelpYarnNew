@@ -38,50 +38,17 @@ try {
   appDb = new AppDatabase();
 }
 
-// Supabase is now optional - only initialize if credentials are provided
-let supabase = null;
-if (process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY) {
-  try {
-    const { createClient } = await import('@supabase/supabase-js');
-    supabase = createClient(
-      process.env.VITE_SUPABASE_URL,
-      process.env.VITE_SUPABASE_ANON_KEY
-    );
-    console.log('✓ Supabase client initialized');
-    console.log('  URL:', process.env.VITE_SUPABASE_URL);
-    console.log('  Key:', process.env.VITE_SUPABASE_ANON_KEY.substring(0, 20) + '...');
-  } catch (error) {
-    console.log('! Supabase initialization error:', error.message);
-  }
-} else {
-  console.log('! Supabase not configured - using SQLite only');
-  console.log('  VITE_SUPABASE_URL:', process.env.VITE_SUPABASE_URL);
-  console.log('  VITE_SUPABASE_ANON_KEY:', process.env.VITE_SUPABASE_ANON_KEY ? 'exists' : 'missing');
-}
+// Using local SQLite database only
+console.log('✓ Using DefaultRecorderDB for all data storage');
 
-// Helper function to log actions to both local DB and Supabase
+// Helper function to log actions to local DB
 async function logSystemAction(userId, action, details = {}) {
-  // Always log to local database
   try {
     if (appDb && typeof appDb.logSystemAction === 'function') {
       appDb.logSystemAction(userId, action, details);
     }
   } catch (error) {
     console.error('Failed to log to local database:', error);
-  }
-
-  // Also log to Supabase if available
-  if (supabase) {
-    try {
-      await supabase.from('system_logs').insert({
-        user_id: userId || null,
-        action,
-        details,
-        timestamp: new Date().toISOString()
-      });
-    } catch (error) {
-      console.error('Failed to log to Supabase:', error);
-    }
   }
 }
 
