@@ -1242,52 +1242,33 @@ app.post('/api/system-logs', async (req, res) => {
   }
 });
 
-// Get system logs from local database and/or Supabase
+// Get system logs from local database
 app.get('/api/system-logs', async (req, res) => {
   try {
-    let localLogs = [];
-    let supabaseLogs = [];
+    // Get primary database integration
+    const primary = getPrimaryIntegration();
 
-    // Get logs from local database
-    if (appDb && typeof appDb.getSystemLogs === 'function') {
-      try {
-        localLogs = appDb.getSystemLogs(100);
-      } catch (error) {
-        console.error('Error fetching local logs:', error);
+    if (!primary) {
+      // Use local SQLite
+      if (!appDb || !appDb.getSystemLogs) {
+        return res.json([]);
       }
+      const logs = appDb.getSystemLogs(100);
+      return res.json(logs);
     }
 
-    // Get logs from Supabase
-    if (supabase) {
-      try {
-        const { data, error } = await supabase
-          .from('system_logs')
-          .select('*')
-          .order('timestamp', { ascending: false })
-          .limit(100);
+    // Use primary database integration
+    const { IntegrationDB } = await import('./database/IntegrationDB.js');
+    const db = new IntegrationDB(primary);
 
-        if (!error && data) {
-          supabaseLogs = data;
-        }
-      } catch (error) {
-        console.error('Error fetching Supabase logs:', error);
-      }
+    try {
+      const logs = await db.getSystemLogs(100);
+      await db.disconnect();
+      res.json(logs);
+    } catch (error) {
+      await db.disconnect();
+      throw error;
     }
-
-    // Combine and deduplicate logs by id, prioritize local logs
-    const logsMap = new Map();
-
-    localLogs.forEach(log => logsMap.set(log.id, log));
-    supabaseLogs.forEach(log => {
-      if (!logsMap.has(log.id)) {
-        logsMap.set(log.id, log);
-      }
-    });
-
-    const combinedLogs = Array.from(logsMap.values())
-      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
-    res.json(combinedLogs);
   } catch (error) {
     console.error('Error fetching system logs:', error);
     res.status(500).json({ error: error.message });

@@ -263,4 +263,41 @@ export class IntegrationDB {
       throw new Error(`Failed to delete integration: ${error.message}`);
     }
   }
+
+  async getSystemLogs(limit = 100) {
+    if (!this.connection) await this.connect();
+
+    try {
+      let rows;
+      if (this.dbType === 'sqlite') {
+        const stmt = this.connection.prepare(`
+          SELECT * FROM system_logs
+          ORDER BY timestamp DESC
+          LIMIT ?
+        `);
+        rows = stmt.all(limit);
+      } else if (this.dbType === 'postgresql') {
+        const result = await this.connection.query(`
+          SELECT * FROM system_logs
+          ORDER BY timestamp DESC
+          LIMIT $1
+        `, [limit]);
+        rows = result.rows;
+      } else if (this.dbType === 'mysql') {
+        const [results] = await this.connection.query(`
+          SELECT * FROM system_logs
+          ORDER BY timestamp DESC
+          LIMIT ?
+        `, [limit]);
+        rows = results;
+      }
+
+      return rows.map(row => ({
+        ...row,
+        details: typeof row.details === 'string' ? JSON.parse(row.details) : row.details
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get system logs: ${error.message}`);
+    }
+  }
 }
