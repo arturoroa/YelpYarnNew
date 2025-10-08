@@ -300,6 +300,8 @@ async function testDatabaseConnection(config, res) {
           errorMsg = `Connection to ${host}:${actualPort} timed out.`;
         } else if (err.code === 'ENOTFOUND') {
           errorMsg = `Host ${host} not found. Check hostname.`;
+        } else if (err.message.includes('no pg_hba.conf entry') || err.message.includes('no encryption')) {
+          errorMsg = `PostgreSQL server rejected the connection: ${err.message}. This may require SSL configuration or pg_hba.conf adjustments on the server.`;
         }
 
         return res.json({

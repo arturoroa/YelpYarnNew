@@ -49,7 +49,7 @@ export default function Integrations() {
   const [showAddForm, setShowAddForm] = useState(false);
   const [newIntegration, setNewIntegration] = useState<Partial<Integration>>({
     type: 'database',
-    config: {}
+    config: { connectionMethod: 'sqlite' }
   });
 
   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
@@ -204,7 +204,7 @@ export default function Integrations() {
       }
 
       await fetchIntegrations();
-      setNewIntegration({ type: 'database', config: {} });
+      setNewIntegration({ type: 'database', config: { connectionMethod: 'sqlite' } });
       setShowAddForm(false);
       showToast('Integration created successfully', 'success');
     } catch (error) {
@@ -843,7 +843,7 @@ export default function Integrations() {
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-1">Connection Method</label>
                     <select
-                      value={newIntegration.config?.connectionMethod || 'on-prem'}
+                      value={newIntegration.config?.connectionMethod || 'sqlite'}
                       onChange={(e) =>
                         setNewIntegration(prev => ({
                           ...prev,
@@ -852,9 +852,9 @@ export default function Integrations() {
                       }
                       className="w-full border border-gray-300 rounded-md px-3 py-2"
                     >
+                      <option value="sqlite">SQLite</option>
                       <option value="on-prem">On-Premise</option>
                       <option value="api-token">API/Token</option>
-                      <option value="sqlite">SQLite</option>
                     </select>
                   </div>
                   {newIntegration.config?.connectionMethod === 'sqlite' ? (
