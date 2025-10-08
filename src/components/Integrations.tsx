@@ -305,14 +305,30 @@ export default function Integrations() {
       integration.status === 'connected' ? 'disconnected' :
       integration.status === 'disconnected' ? 'connected' : 'disconnected';
 
+    setBusyFor(id, true);
+
     try {
+      // Call backend API to update status (which will trigger schema setup if connecting)
+      const response = await fetch(`/api/integrations/${id}`, {
+        method: 'PUT',
+        headers: {
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({ status: next })
+      });
+
+      if (!response.ok) {
+        throw new Error(`Backend returned ${response.status}`);
+      }
+
+      const updatedIntegration = await response.json();
+
+      // Also update Supabase if available
       if (supabase) {
-        const { error } = await supabase
+        await supabase
           .from('integrations')
           .update({ status: next })
           .eq('id', id);
-
-        if (error) throw error;
       }
 
       const updated = integrations.map(i => (i.id === id ? { ...i, status: next } : i));
@@ -320,10 +336,17 @@ export default function Integrations() {
       if (!supabase) {
         localStorage.setItem('integrations', JSON.stringify(updated));
       }
-      showToast(`Integration ${next === 'connected' ? 'connected' : 'disconnected'}`, 'info');
+
+      if (next === 'connected') {
+        showToast('Integration connected - setting up database schema...', 'info');
+      } else {
+        showToast('Integration disconnected', 'info');
+      }
     } catch (error) {
       console.error('Error updating status:', error);
       showToast('Failed to update status', 'error');
+    } finally {
+      setBusyFor(id, false);
     }
   };
 

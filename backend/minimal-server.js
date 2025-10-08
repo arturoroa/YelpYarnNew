@@ -8,6 +8,7 @@ import { fileURLToPath } from 'url';
 import { dirname, join } from 'path';
 import { createRequire } from 'module';
 import { AppDatabase } from './database/AppDatabase.js';
+import SchemaManager from './database/SchemaManager.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -77,6 +78,91 @@ async function logSystemAction(userId, action, details = {}) {
     } catch (error) {
       console.error('Failed to log to Supabase:', error);
     }
+  }
+}
+
+async function setupIntegrationSchema(integration) {
+  const { config, type } = integration;
+
+  if (type !== 'database') {
+    return { success: false, message: 'Schema setup only supported for database integrations' };
+  }
+
+  const { host, port, database, username, password, protocol, connectionMethod } = config;
+  const dbProtocol = (protocol || 'postgresql').toLowerCase();
+  const connMethod = connectionMethod || 'on-prem';
+
+  let dbConnection = null;
+  let dbType = null;
+
+  try {
+    if (connMethod === 'sqlite' || dbProtocol === 'sqlite') {
+      if (!Database) {
+        throw new Error('SQLite support not available');
+      }
+
+      const path = await import('path');
+      let dbFileName = database;
+      if (!dbFileName.endsWith('.db') && !dbFileName.endsWith('.sqlite')) {
+        dbFileName += '.sqlite';
+      }
+      const filePath = path.join(projectRoot, dbFileName);
+
+      dbConnection = new Database(filePath);
+      dbType = 'sqlite';
+    } else if (dbProtocol === 'postgresql') {
+      const { Client } = pg;
+      const client = new Client({
+        host: host || 'localhost',
+        port: port || 5432,
+        database: database,
+        user: username,
+        password: password,
+      });
+      await client.connect();
+      dbConnection = client;
+      dbType = 'postgresql';
+    } else if (dbProtocol === 'mysql') {
+      const connection = await mysql.createConnection({
+        host: host || 'localhost',
+        port: port || 3306,
+        database: database,
+        user: username,
+        password: password,
+      });
+      dbConnection = connection;
+      dbType = 'mysql';
+    } else {
+      throw new Error(`Unsupported database protocol: ${dbProtocol}`);
+    }
+
+    const schemaManager = new SchemaManager(dbConnection, dbType);
+    const results = await schemaManager.setupRequiredTables();
+
+    if (dbType === 'sqlite') {
+      dbConnection.close();
+    } else {
+      await dbConnection.end();
+    }
+
+    return {
+      success: true,
+      results
+    };
+  } catch (error) {
+    if (dbConnection) {
+      try {
+        if (dbType === 'sqlite') {
+          dbConnection.close();
+        } else {
+          await dbConnection.end();
+        }
+      } catch (closeError) {
+        console.error('Error closing connection:', closeError);
+      }
+    }
+
+    throw error;
   }
 }
 
@@ -160,6 +246,27 @@ app.put('/api/integrations/:id', async (req, res) => {
       updated_fields: Object.keys(updateData)
     });
 
+    // If status changed to "connected", setup schema
+    if (status === 'connected') {
+      setImmediate(async () => {
+        try {
+          const schemaResult = await setupIntegrationSchema(integration);
+          await logSystemAction(null, 'integration_schema_setup', {
+            integration_id: id,
+            integration_name: integration.name,
+            schema_setup_result: schemaResult
+          });
+        } catch (error) {
+          console.error('Error setting up schema:', error);
+          await logSystemAction(null, 'integration_schema_setup_failed', {
+            integration_id: id,
+            integration_name: integration.name,
+            error: error.message
+          });
+        }
+      });
+    }
+
     res.json(integration);
   } catch (error) {
     console.error('Error updating integration:', error);
@@ -192,6 +299,37 @@ app.delete('/api/integrations/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting integration:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.post('/api/integrations/:id/setup-schema', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const integrations = appDb.getIntegrations ? appDb.getIntegrations() : appDb.getAllIntegrations();
+    const integration = integrations.find(i => i.id === id);
+
+    if (!integration) {
+      return res.status(404).json({ error: 'Integration not found' });
+    }
+
+    const result = await setupIntegrationSchema(integration);
+
+    await logSystemAction(null, 'integration_schema_setup', {
+      integration_id: id,
+      integration_name: integration.name,
+      schema_setup_result: result
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Error setting up schema:', error);
+
+    await logSystemAction(null, 'integration_schema_setup_failed', {
+      integration_id: req.params.id,
+      error: error.message
+    });
+
     res.status(500).json({ error: error.message });
   }
 });
