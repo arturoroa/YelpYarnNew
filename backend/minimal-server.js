@@ -189,44 +189,30 @@ app.get('/api/status', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
-// Get primary database integration (first connected database)
-async function getPrimaryIntegration() {
-  // For now, use Supabase as bootstrap to find the primary integration
-  if (!supabase) {
+// Get primary database integration (first connected database from local SQLite)
+function getPrimaryIntegration() {
+  if (!appDb || !appDb.getAllIntegrations) {
     return null;
   }
 
-  const { data } = await supabase
-    .from('integrations')
-    .select('*')
-    .eq('type', 'database')
-    .eq('status', 'connected')
-    .order('created_at', { ascending: true })
-    .limit(1);
-
-  return data && data.length > 0 ? data[0] : null;
+  const integrations = appDb.getAllIntegrations();
+  const connectedDb = integrations.find(i => i.type === 'database' && i.status === 'connected');
+  return connectedDb || null;
 }
 
 // CRUD Endpoints for Integrations
 app.get('/api/integrations', async (req, res) => {
   try {
     // Get primary database integration
-    const primary = await getPrimaryIntegration();
+    const primary = getPrimaryIntegration();
 
     if (!primary) {
-      // Bootstrap mode - use Supabase
-      if (!supabase) {
+      // Use local SQLite (DefaultRecorderDB)
+      if (!appDb || !appDb.getAllIntegrations) {
         return res.json([]);
       }
-      const { data, error } = await supabase
-        .from('integrations')
-        .select('*')
-        .order('created_at', { ascending: false });
-
-      if (error) {
-        return res.status(500).json({ error: error.message });
-      }
-      return res.json(data || []);
+      const integrations = appDb.getAllIntegrations();
+      return res.json(integrations);
     }
 
     // Use primary database integration
@@ -256,32 +242,17 @@ app.post('/api/integrations', async (req, res) => {
     }
 
     // Get primary database integration
-    const primary = await getPrimaryIntegration();
+    const primary = getPrimaryIntegration();
 
     let newIntegration;
 
     if (!primary) {
-      // Bootstrap mode - use Supabase
-      if (!supabase) {
-        return res.status(500).json({ error: 'No database configured' });
+      // Use local SQLite (DefaultRecorderDB)
+      if (!appDb || !appDb.createIntegration) {
+        return res.status(500).json({ error: 'Database not initialized' });
       }
 
-      const { data, error } = await supabase
-        .from('integrations')
-        .insert({
-          name,
-          type,
-          status: 'disconnected',
-          config: config || {},
-          created_at: new Date().toISOString()
-        })
-        .select()
-        .single();
-
-      if (error) {
-        return res.status(500).json({ error: error.message });
-      }
-      newIntegration = data;
+      newIntegration = appDb.createIntegration({ name, type, status: 'disconnected', config: config || {} });
     } else {
       // Use primary database integration
       const { IntegrationDB } = await import('./database/IntegrationDB.js');
@@ -316,34 +287,23 @@ app.put('/api/integrations/:id', async (req, res) => {
     const { name, type, config, status, last_sync } = req.body;
 
     // Get primary database integration
-    const primary = await getPrimaryIntegration();
+    const primary = getPrimaryIntegration();
 
     let integration;
+    const updateData = {};
+    if (name !== undefined) updateData.name = name;
+    if (type !== undefined) updateData.type = type;
+    if (config !== undefined) updateData.config = config;
+    if (status !== undefined) updateData.status = status;
+    if (last_sync !== undefined) updateData.last_sync = last_sync;
 
     if (!primary) {
-      // Bootstrap mode - use Supabase
-      if (!supabase) {
-        return res.status(500).json({ error: 'No database configured' });
+      // Use local SQLite (DefaultRecorderDB)
+      if (!appDb || !appDb.updateIntegration) {
+        return res.status(500).json({ error: 'Database not initialized' });
       }
 
-      const updateData = {};
-      if (name !== undefined) updateData.name = name;
-      if (type !== undefined) updateData.type = type;
-      if (config !== undefined) updateData.config = config;
-      if (status !== undefined) updateData.status = status;
-      if (last_sync !== undefined) updateData.last_sync = last_sync;
-
-      const { data, error } = await supabase
-        .from('integrations')
-        .update(updateData)
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) {
-        return res.status(500).json({ error: error.message });
-      }
-      integration = data;
+      integration = appDb.updateIntegration(id, updateData);
     } else {
       // Use primary database integration
       const { IntegrationDB } = await import('./database/IntegrationDB.js');
@@ -372,19 +332,53 @@ app.put('/api/integrations/:id', async (req, res) => {
       updated_fields: Object.keys(updateData)
     });
 
-    // If status changed to "connected", setup schema
-    if (status === 'connected') {
+    // If status changed to "connected", setup schema and migrate data
+    if (status === 'connected' && type === 'database') {
       setImmediate(async () => {
         try {
+          // Setup schema in the new database
           const schemaResult = await setupIntegrationSchema(integration);
           await logSystemAction(null, 'integration_schema_setup', {
             integration_id: id,
             integration_name: integration.name,
             schema_setup_result: schemaResult
           });
+
+          // Migrate data from local SQLite to the new database
+          const { DataMigrator } = await import('./database/DataMigrator.js');
+          const migrator = new DataMigrator(appDb);
+          const exportedData = appDb.exportAllData();
+
+          console.log(`Migrating data to ${integration.name}...`, exportedData);
+
+          const { IntegrationDB } = await import('./database/IntegrationDB.js');
+          const targetDb = new IntegrationDB(integration);
+          await targetDb.connect();
+
+          // Migrate based on database type
+          let migrationResult;
+          const dbType = targetDb.dbType;
+
+          if (dbType === 'postgresql') {
+            migrationResult = await migrator.migrateToPostgres(targetDb.connection, appDb);
+          } else if (dbType === 'mysql') {
+            migrationResult = await migrator.migrateToMySQL(targetDb.connection, appDb);
+          } else if (dbType === 'sqlite') {
+            migrationResult = await migrator.migrateToSQLite({ db: targetDb.connection }, appDb);
+          }
+
+          await targetDb.disconnect();
+
+          await logSystemAction(null, 'data_migrated_to_integration', {
+            integration_id: id,
+            integration_name: integration.name,
+            migration_result: migrationResult
+          });
+
+          console.log('✓ Data migration completed:', migrationResult);
         } catch (error) {
-          console.error('Error setting up schema:', error);
-          await logSystemAction(null, 'integration_schema_setup_failed', {
+          console.error('Error setting up schema or migrating data:', error);
+          await logSystemAction(null, 'integration_setup_failed', {
             integration_id: id,
             integration_name: integration.name,
             error: error.message
@@ -406,34 +400,24 @@ app.delete('/api/integrations/:id', async (req, res) => {
     console.log('Deleting integration with id:', id);
 
     // Get primary database integration
-    const primary = await getPrimaryIntegration();
+    const primary = getPrimaryIntegration();
 
     let integration;
 
     if (!primary) {
-      // Bootstrap mode - use Supabase
-      if (!supabase) {
-        return res.status(500).json({ error: 'No database configured' });
+      // Use local SQLite (DefaultRecorderDB)
+      if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
+        return res.status(500).json({ error: 'Database not initialized' });
       }
 
-      const { data: fetchData, error: fetchError } = await supabase
-        .from('integrations')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchError || !fetchData) {
+      integration = appDb.getIntegration(id);
+      if (!integration) {
         return res.status(404).json({ error: 'Integration not found' });
       }
-      integration = fetchData;
 
-      const { error } = await supabase
-        .from('integrations')
-        .delete()
-        .eq('id', id);
-
-      if (error) {
-        return res.status(500).json({ error: error.message });
+      const deleted = appDb.deleteIntegration(id);
+      if (!deleted) {
+        return res.status(500).json({ error: 'Failed to delete integration' });
       }
     } else {
       // Use primary database integration

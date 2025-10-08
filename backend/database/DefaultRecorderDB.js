@@ -147,6 +147,20 @@ export class DefaultRecorderDB {
     }));
   }
 
+  getAllIntegrations() {
+    return this.getIntegrations();
+  }
+
+  // Export all data for migration
+  exportAllData() {
+    return {
+      integrations: this.getIntegrations(),
+      yelp_users: this.getYelpUsers(),
+      test_sessions: this.getTestSessions(),
+      system_logs: this.getSystemLogs(1000)
+    };
+  }
+
   getIntegration(id) {
     const row = this.db.prepare('SELECT * FROM integrations WHERE id = ?').get(id);
     if (!row) return null;

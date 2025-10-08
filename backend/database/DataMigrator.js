@@ -15,7 +15,7 @@ export class DataMigrator {
 
   async migrateToPostgres(client, sourceDb = null) {
     const db = sourceDb || this.sourceDb;
-    const data = db.exportData();
+    const data = db.exportAllData ? db.exportAllData() : db.exportData();
 
     try {
       // Begin transaction
@@ -129,7 +129,7 @@ export class DataMigrator {
 
   async migrateToMySQL(connection, sourceDb = null) {
     const db = sourceDb || this.sourceDb;
-    const data = db.exportData();
+    const data = db.exportAllData ? db.exportAllData() : db.exportData();
 
     try {
       await connection.beginTransaction();
@@ -240,7 +240,7 @@ export class DataMigrator {
 
   async migrateToSQLite(targetDb, sourceDb = null) {
     const db = sourceDb || this.sourceDb;
-    const data = db.exportData();
+    const data = db.exportAllData ? db.exportAllData() : db.exportData();
 
     try {
       // Migrate integrations
