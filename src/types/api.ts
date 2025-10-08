@@ -89,8 +89,8 @@ export interface Environment {
   };
   integrations?: {
     database?: string;
-    api?: string;
-    webhook?: string;
+    proxy?: string;
+    vpn?: string;
   };
   isActive: boolean;
 }

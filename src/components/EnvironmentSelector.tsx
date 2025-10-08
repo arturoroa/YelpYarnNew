@@ -499,19 +499,19 @@ export default function EnvironmentSelector({
                     </select>
                   </div>
 
-                  {/* API Integration */}
+                  {/* Proxy Integration */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      API Integration
+                      Proxy Integration
                     </label>
                     <select
-                      value={formData.integrations?.api || ''}
+                      value={formData.integrations?.proxy || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
                           integrations: {
                             ...(prev.integrations || {}),
-                            api: e.target.value || undefined,
+                            proxy: e.target.value || undefined,
                           },
                         }))
                       }
@@ -519,7 +519,7 @@ export default function EnvironmentSelector({
                     >
                       <option value="">-- None --</option>
                       {availableIntegrations
-                        .filter(i => i.type === 'api' && i.status === 'connected')
+                        .filter(i => i.type === 'proxy' && i.status === 'connected')
                         .map(integration => (
                           <option key={integration.id} value={integration.id}>
                             {integration.name}
@@ -528,19 +528,19 @@ export default function EnvironmentSelector({
                     </select>
                   </div>
 
-                  {/* Webhook Integration */}
+                  {/* VPN Integration */}
                   <div>
                     <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Webhook Integration
+                      VPN Connection
                     </label>
                     <select
-                      value={formData.integrations?.webhook || ''}
+                      value={formData.integrations?.vpn || ''}
                       onChange={(e) =>
                         setFormData((prev) => ({
                           ...prev,
                           integrations: {
                             ...(prev.integrations || {}),
-                            webhook: e.target.value || undefined,
+                            vpn: e.target.value || undefined,
                           },
                         }))
                       }
@@ -548,7 +548,7 @@ export default function EnvironmentSelector({
                     >
                       <option value="">-- None --</option>
                       {availableIntegrations
-                        .filter(i => i.type === 'webhook' && i.status === 'connected')
+                        .filter(i => i.type === 'vpn' && i.status === 'connected')
                         .map(integration => (
                           <option key={integration.id} value={integration.id}>
                             {integration.name}
