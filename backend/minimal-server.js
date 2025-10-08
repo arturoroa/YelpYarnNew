@@ -1112,6 +1112,18 @@ app.post('/api/integrations/:id/migrate', async (req, res) => {
   }
 });
 
+// Post system log
+app.post('/api/system-logs', async (req, res) => {
+  try {
+    const { action, details } = req.body;
+    await logSystemAction(null, action, details);
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error logging system action:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Get system logs from local database and/or Supabase
 app.get('/api/system-logs', async (req, res) => {
   try {

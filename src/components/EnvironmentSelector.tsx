@@ -78,10 +78,25 @@ export default function EnvironmentSelector({
       const response = await fetch('/api/integrations');
       if (response.ok) {
         const data = await response.json();
+        console.log('Fetched integrations:', data);
         setAvailableIntegrations(data);
+      } else {
+        console.error('Failed to fetch integrations, status:', response.status);
       }
     } catch (error) {
       console.error('Failed to fetch integrations:', error);
+    }
+  };
+
+  const logSystemAction = async (action: string, details: any) => {
+    try {
+      await fetch('/api/system-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ action, details }),
+      });
+    } catch (error) {
+      console.error('Failed to log system action:', error);
     }
   };
 
@@ -202,6 +217,17 @@ export default function EnvironmentSelector({
       return next;
     });
 
+    // Log the action
+    const action = editingEnvironment ? 'environment_updated' : 'environment_created';
+    logSystemAction(action, {
+      environment_id: envToSave.id,
+      environment_name: envToSave.name,
+      type: envToSave.type,
+      integrations: formData.integrations,
+    });
+
+    showToast(`Environment ${editingEnvironment ? 'updated' : 'created'} successfully`, 'success');
+
     setShowModal(false);
     setEditingEnvironment(null);
     setFormData({
@@ -237,6 +263,12 @@ export default function EnvironmentSelector({
       return remaining;
     });
 
+    // Log the action
+    logSystemAction('environment_deleted', {
+      environment_id: id,
+      environment_name: envName,
+    });
+
     showToast(`Environment "${envName}" deleted successfully`, 'success');
     setDeleteConfirmation(null);
   };
@@ -249,6 +281,12 @@ export default function EnvironmentSelector({
       })),
     );
     onEnvironmentChange(environment);
+
+    // Log the action
+    logSystemAction('environment_activated', {
+      environment_id: environment.id,
+      environment_name: environment.name,
+    });
   };
 
   const toggleCredentialVisibility = (field: 'apiKey' | 'clientSecret') => {
@@ -490,7 +528,7 @@ export default function EnvironmentSelector({
                     >
                       <option value="">-- None --</option>
                       {availableIntegrations
-                        .filter(i => i.type === 'database' && i.status === 'connected')
+                        .filter(i => i.type === 'database')
                         .map(integration => (
                           <option key={integration.id} value={integration.id}>
                             {integration.name}
@@ -519,7 +557,7 @@ export default function EnvironmentSelector({
                     >
                       <option value="">-- None --</option>
                       {availableIntegrations
-                        .filter(i => i.type === 'proxy' && i.status === 'connected')
+                        .filter(i => i.type === 'proxy')
                         .map(integration => (
                           <option key={integration.id} value={integration.id}>
                             {integration.name}
@@ -548,7 +586,7 @@ export default function EnvironmentSelector({
                     >
                       <option value="">-- None --</option>
                       {availableIntegrations
-                        .filter(i => i.type === 'vpn' && i.status === 'connected')
+                        .filter(i => i.type === 'vpn')
                         .map(integration => (
                           <option key={integration.id} value={integration.id}>
                             {integration.name}
