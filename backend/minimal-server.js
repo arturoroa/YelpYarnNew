@@ -188,7 +188,27 @@ app.get('/api/status', (req, res) => {
 // CRUD Endpoints for Integrations
 app.get('/api/integrations', async (req, res) => {
   try {
-    const integrations = appDb.getAllIntegrations();
+    let integrations = [];
+
+    // Fetch from Supabase if available
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('integrations')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        console.error('Error fetching integrations from Supabase:', error);
+      } else if (data) {
+        integrations = data;
+      }
+    }
+
+    // Fallback to local DB if Supabase didn't return data
+    if (integrations.length === 0 && appDb && typeof appDb.getAllIntegrations === 'function') {
+      integrations = appDb.getAllIntegrations();
+    }
+
     res.json(integrations);
   } catch (error) {
     console.error('Error fetching integrations:', error);
@@ -204,12 +224,36 @@ app.post('/api/integrations', async (req, res) => {
       return res.status(400).json({ error: 'Name and type are required' });
     }
 
-    const integration = appDb.createIntegration({
-      name,
-      type,
-      status: 'disconnected',
-      config: config || {}
-    });
+    let integration;
+
+    // Save to Supabase if available
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('integrations')
+        .insert({
+          name,
+          type,
+          status: 'disconnected',
+          config: config || {},
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error creating integration in Supabase:', error);
+        throw error;
+      }
+      integration = data;
+    } else if (appDb && typeof appDb.createIntegration === 'function') {
+      // Fallback to local DB
+      integration = appDb.createIntegration({
+        name,
+        type,
+        status: 'disconnected',
+        config: config || {}
+      });
+    }
 
     // Log the action
     await logSystemAction(null, 'integration_created', {
@@ -237,7 +281,26 @@ app.put('/api/integrations/:id', async (req, res) => {
     if (status !== undefined) updateData.status = status;
     if (last_sync !== undefined) updateData.last_sync = last_sync;
 
-    const integration = appDb.updateIntegration(id, updateData);
+    let integration;
+
+    // Update in Supabase if available
+    if (supabase) {
+      const { data, error } = await supabase
+        .from('integrations')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        console.error('Error updating integration in Supabase:', error);
+        throw error;
+      }
+      integration = data;
+    } else if (appDb && typeof appDb.updateIntegration === 'function') {
+      // Fallback to local DB
+      integration = appDb.updateIntegration(id, updateData);
+    }
 
     // Log the action
     await logSystemAction(null, 'integration_updated', {
@@ -279,12 +342,38 @@ app.delete('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     console.log('Deleting integration with id:', id);
 
-    // Get integration details before deleting
-    const integrations = appDb.getIntegrations ? appDb.getIntegrations() : appDb.getAllIntegrations();
-    const integration = integrations.find(i => i.id === id);
-    const deleted = appDb.deleteIntegration(id);
+    let integration;
+    let deleted = false;
 
-    if (!deleted) {
+    // Delete from Supabase if available
+    if (supabase) {
+      // Get integration details before deleting
+      const { data: fetchData } = await supabase
+        .from('integrations')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      integration = fetchData;
+
+      const { error } = await supabase
+        .from('integrations')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        console.error('Error deleting integration from Supabase:', error);
+        throw error;
+      }
+      deleted = true;
+    } else if (appDb) {
+      // Fallback to local DB
+      const integrations = appDb.getIntegrations ? appDb.getIntegrations() : appDb.getAllIntegrations();
+      integration = integrations.find(i => i.id === id);
+      deleted = appDb.deleteIntegration(id);
+    }
+
+    if (!deleted || !integration) {
       return res.status(404).json({ error: 'Integration not found' });
     }
 
