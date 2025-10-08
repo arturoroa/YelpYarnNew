@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
+import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw } from 'lucide-react';
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -231,47 +231,6 @@ export default function Integrations() {
     } catch (error) {
       console.error('Error updating integration:', error);
       showToast('Failed to update integration', 'error');
-    }
-  };
-
-  const toggleStatus = async (id: string) => {
-    const integration = integrations.find(i => i.id === id);
-    if (!integration) return;
-
-    const next: IntegrationStatus =
-      integration.status === 'connected' ? 'disconnected' :
-      integration.status === 'disconnected' ? 'connected' : 'disconnected';
-
-    setBusyFor(id, true);
-
-    try {
-      // Call backend API to update status (which will trigger schema setup if connecting)
-      const response = await fetch(`/api/integrations/${id}`, {
-        method: 'PUT',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({ status: next })
-      });
-
-      if (!response.ok) {
-        throw new Error(`Backend returned ${response.status}`);
-      }
-
-      const updatedIntegration = await response.json();
-
-      await fetchIntegrations();
-
-      if (next === 'connected') {
-        showToast('Integration connected - setting up database schema...', 'info');
-      } else {
-        showToast('Integration disconnected', 'info');
-      }
-    } catch (error) {
-      console.error('Error updating status:', error);
-      showToast('Failed to update status', 'error');
-    } finally {
-      setBusyFor(id, false);
     }
   };
 
@@ -638,16 +597,6 @@ export default function Integrations() {
     return (
       <div className="flex items-center gap-2">
         {getStatusIcon(integration.status)}
-
-        <button
-          onClick={() => toggleStatus(integration.id)}
-          disabled={busyNow || editing}
-          title={integration.status === 'connected' ? 'Disconnect' : 'Connect'}
-          className={`p-1 rounded ${editing ? 'opacity-40 cursor-not-allowed' : 'hover:bg-black/5'}`}
-          aria-label="Toggle status"
-        >
-          <Power className="w-4 h-4" />
-        </button>
 
         <button
           onClick={() => testConnection(integration.id)}
