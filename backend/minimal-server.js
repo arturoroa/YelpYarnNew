@@ -189,26 +189,58 @@ app.get('/api/status', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Get primary database integration (first connected database)
+async function getPrimaryIntegration() {
+  // For now, use Supabase as bootstrap to find the primary integration
+  if (!supabase) {
+    return null;
+  }
+
+  const { data } = await supabase
+    .from('integrations')
+    .select('*')
+    .eq('type', 'database')
+    .eq('status', 'connected')
+    .order('created_at', { ascending: true })
+    .limit(1);
+
+  return data && data.length > 0 ? data[0] : null;
+}
+
 // CRUD Endpoints for Integrations
 app.get('/api/integrations', async (req, res) => {
   try {
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase not configured' });
+    // Get primary database integration
+    const primary = await getPrimaryIntegration();
+
+    if (!primary) {
+      // Bootstrap mode - use Supabase
+      if (!supabase) {
+        return res.json([]);
+      }
+      const { data, error } = await supabase
+        .from('integrations')
+        .select('*')
+        .order('created_at', { ascending: false });
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+      return res.json(data || []);
     }
 
-    console.log('Fetching integrations from Supabase...');
-    const { data, error } = await supabase
-      .from('integrations')
-      .select('*')
-      .order('created_at', { ascending: false });
+    // Use primary database integration
+    const { IntegrationDB } = await import('./database/IntegrationDB.js');
+    const db = new IntegrationDB(primary);
 
-    if (error) {
-      console.error('Error fetching integrations from Supabase:', error);
-      return res.status(500).json({ error: error.message });
+    try {
+      const integrations = await db.getAllIntegrations();
+      await db.disconnect();
+      res.json(integrations);
+    } catch (error) {
+      await db.disconnect();
+      throw error;
     }
-
-    console.log(`Found ${data?.length || 0} integrations in Supabase:`, data);
-    res.json(data || []);
   } catch (error) {
     console.error('Error fetching integrations:', error);
     res.status(500).json({ error: error.message });
@@ -223,35 +255,55 @@ app.post('/api/integrations', async (req, res) => {
       return res.status(400).json({ error: 'Name and type are required' });
     }
 
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase not configured' });
-    }
+    // Get primary database integration
+    const primary = await getPrimaryIntegration();
 
-    const { data, error } = await supabase
-      .from('integrations')
-      .insert({
-        name,
-        type,
-        status: 'disconnected',
-        config: config || {},
-        created_at: new Date().toISOString()
-      })
-      .select()
-      .single();
+    let newIntegration;
 
-    if (error) {
-      console.error('Error creating integration in Supabase:', error);
-      return res.status(500).json({ error: error.message });
+    if (!primary) {
+      // Bootstrap mode - use Supabase
+      if (!supabase) {
+        return res.status(500).json({ error: 'No database configured' });
+      }
+
+      const { data, error } = await supabase
+        .from('integrations')
+        .insert({
+          name,
+          type,
+          status: 'disconnected',
+          config: config || {},
+          created_at: new Date().toISOString()
+        })
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+      newIntegration = data;
+    } else {
+      // Use primary database integration
+      const { IntegrationDB } = await import('./database/IntegrationDB.js');
+      const db = new IntegrationDB(primary);
+
+      try {
+        newIntegration = await db.createIntegration({ name, type, status: 'disconnected', config: config || {} });
+        await db.disconnect();
+      } catch (error) {
+        await db.disconnect();
+        throw error;
+      }
     }
 
     // Log the action
     await logSystemAction(null, 'integration_created', {
-      integration_id: data.id,
+      integration_id: newIntegration.id,
       integration_name: name,
       integration_type: type
     });
 
-    res.status(201).json(data);
+    res.status(201).json(newIntegration);
   } catch (error) {
     console.error('Error creating integration:', error);
     res.status(500).json({ error: error.message });
@@ -263,30 +315,55 @@ app.put('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     const { name, type, config, status, last_sync } = req.body;
 
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase not configured' });
+    // Get primary database integration
+    const primary = await getPrimaryIntegration();
+
+    let integration;
+
+    if (!primary) {
+      // Bootstrap mode - use Supabase
+      if (!supabase) {
+        return res.status(500).json({ error: 'No database configured' });
+      }
+
+      const updateData = {};
+      if (name !== undefined) updateData.name = name;
+      if (type !== undefined) updateData.type = type;
+      if (config !== undefined) updateData.config = config;
+      if (status !== undefined) updateData.status = status;
+      if (last_sync !== undefined) updateData.last_sync = last_sync;
+
+      const { data, error } = await supabase
+        .from('integrations')
+        .update(updateData)
+        .eq('id', id)
+        .select()
+        .single();
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+      integration = data;
+    } else {
+      // Use primary database integration
+      const { IntegrationDB } = await import('./database/IntegrationDB.js');
+      const db = new IntegrationDB(primary);
+
+      try {
+        const updateData = {};
+        if (name !== undefined) updateData.name = name;
+        if (type !== undefined) updateData.type = type;
+        if (config !== undefined) updateData.config = config;
+        if (status !== undefined) updateData.status = status;
+        if (last_sync !== undefined) updateData.last_sync = last_sync;
+
+        integration = await db.updateIntegration(id, updateData);
+        await db.disconnect();
+      } catch (error) {
+        await db.disconnect();
+        throw error;
+      }
     }
-
-    const updateData = {};
-    if (name !== undefined) updateData.name = name;
-    if (type !== undefined) updateData.type = type;
-    if (config !== undefined) updateData.config = config;
-    if (status !== undefined) updateData.status = status;
-    if (last_sync !== undefined) updateData.last_sync = last_sync;
-
-    const { data, error } = await supabase
-      .from('integrations')
-      .update(updateData)
-      .eq('id', id)
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Error updating integration in Supabase:', error);
-      return res.status(500).json({ error: error.message });
-    }
-
-    const integration = data;
 
     // Log the action
     await logSystemAction(null, 'integration_updated', {
@@ -328,29 +405,54 @@ app.delete('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     console.log('Deleting integration with id:', id);
 
-    if (!supabase) {
-      return res.status(500).json({ error: 'Supabase not configured' });
-    }
+    // Get primary database integration
+    const primary = await getPrimaryIntegration();
 
-    // Get integration details before deleting
-    const { data: integration, error: fetchError } = await supabase
-      .from('integrations')
-      .select('*')
-      .eq('id', id)
-      .single();
+    let integration;
 
-    if (fetchError || !integration) {
-      return res.status(404).json({ error: 'Integration not found' });
-    }
+    if (!primary) {
+      // Bootstrap mode - use Supabase
+      if (!supabase) {
+        return res.status(500).json({ error: 'No database configured' });
+      }
 
-    const { error } = await supabase
-      .from('integrations')
-      .delete()
-      .eq('id', id);
+      const { data: fetchData, error: fetchError } = await supabase
+        .from('integrations')
+        .select('*')
+        .eq('id', id)
+        .single();
 
-    if (error) {
-      console.error('Error deleting integration from Supabase:', error);
-      return res.status(500).json({ error: error.message });
+      if (fetchError || !fetchData) {
+        return res.status(404).json({ error: 'Integration not found' });
+      }
+      integration = fetchData;
+
+      const { error } = await supabase
+        .from('integrations')
+        .delete()
+        .eq('id', id);
+
+      if (error) {
+        return res.status(500).json({ error: error.message });
+      }
+    } else {
+      // Use primary database integration
+      const { IntegrationDB } = await import('./database/IntegrationDB.js');
+      const db = new IntegrationDB(primary);
+
+      try {
+        integration = await db.getIntegration(id);
+        if (!integration) {
+          await db.disconnect();
+          return res.status(404).json({ error: 'Integration not found' });
+        }
+
+        await db.deleteIntegration(id);
+        await db.disconnect();
+      } catch (error) {
+        await db.disconnect();
+        throw error;
+      }
     }
 
     // Log the action

@@ -1,4 +1,16 @@
 const REQUIRED_TABLES = {
+  integrations: {
+    columns: {
+      id: { type: 'TEXT', primaryKey: true },
+      name: { type: 'TEXT', notNull: true },
+      type: { type: 'TEXT', notNull: true },
+      status: { type: 'TEXT', default: "'disconnected'" },
+      config: { type: 'TEXT', default: '{}' },
+      last_sync: { type: 'TEXT' },
+      created_at: { type: 'TEXT', default: 'CURRENT_TIMESTAMP' },
+      updated_at: { type: 'TEXT', default: 'CURRENT_TIMESTAMP' }
+    }
+  },
   yelp_users: {
     columns: {
       id: { type: 'TEXT', primaryKey: true },
