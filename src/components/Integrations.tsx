@@ -1,13 +1,5 @@
 import React, { useEffect, useState } from 'react';
 import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, Power } from 'lucide-react';
-import { createClient } from '@supabase/supabase-js';
-
-const supabaseUrl = import.meta.env.VITE_SUPABASE_URL?.trim();
-const supabaseKey = import.meta.env.VITE_SUPABASE_ANON_KEY?.trim();
-
-const supabase = (supabaseUrl && supabaseKey)
-  ? createClient(supabaseUrl, supabaseKey)
-  : null;
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -65,38 +57,22 @@ export default function Integrations() {
   }, []);
 
   const fetchIntegrations = async () => {
-    if (supabase) {
-      try {
-        // Use Supabase for data operations
-        const { data, error } = await supabase
-          .from('integrations')
-          .select('*')
-          .order('created_at', { ascending: false });
+    try {
+      const response = await fetch('/api/integrations');
+      if (!response.ok) throw new Error('Failed to fetch integrations');
 
-        if (error) throw error;
-
-        setIntegrations((data || []).map((item: any) => ({
-          id: item.id,
-          name: item.name,
-          type: item.type,
-          status: item.status,
-          lastSync: item.last_sync,
-          config: item.config
-        })));
-      } catch (error) {
-        console.error('Error fetching integrations:', error);
-        showToast('Failed to fetch integrations', 'error');
-      }
-    } else {
-      // Fallback to localStorage
-      try {
-        const stored = localStorage.getItem('integrations');
-        if (stored) {
-          setIntegrations(JSON.parse(stored));
-        }
-      } catch (error) {
-        console.error('Error loading from localStorage:', error);
-      }
+      const data = await response.json();
+      setIntegrations((data || []).map((item: any) => ({
+        id: item.id,
+        name: item.name,
+        type: item.type,
+        status: item.status,
+        lastSync: item.last_sync,
+        config: item.config || {}
+      })));
+    } catch (error) {
+      console.error('Error fetching integrations:', error);
+      showToast('Failed to fetch integrations', 'error');
     }
   };
 
@@ -177,31 +153,18 @@ export default function Integrations() {
     }
 
     try {
-      if (supabase) {
-        const { error } = await supabase
-          .from('integrations')
-          .insert({
-            name,
-            type,
-            config: cfg,
-            status: 'disconnected'
-          });
-
-        if (error) throw error;
-      } else {
-        // Use localStorage
-        const newIntegrationData = {
-          id: crypto.randomUUID(),
+      const response = await fetch('/api/integrations', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
           name,
           type,
           config: cfg,
-          status: 'disconnected' as IntegrationStatus,
-          lastSync: undefined
-        };
-        const updated = [...integrations, newIntegrationData];
-        setIntegrations(updated);
-        localStorage.setItem('integrations', JSON.stringify(updated));
-      }
+          status: 'disconnected'
+        })
+      });
+
+      if (!response.ok) throw new Error('Failed to create integration');
 
       await fetchIntegrations();
       setNewIntegration({ type: 'database', config: { connectionMethod: 'sqlite' } });
@@ -215,20 +178,13 @@ export default function Integrations() {
 
   const handleDeleteIntegration = async (id: string) => {
     try {
-      if (supabase) {
-        const { error } = await supabase
-          .from('integrations')
-          .delete()
-          .eq('id', id);
+      const response = await fetch(`/api/integrations/${id}`, {
+        method: 'DELETE'
+      });
 
-        if (error) throw error;
-      }
+      if (!response.ok) throw new Error('Failed to delete integration');
 
-      const updated = integrations.filter(int => int.id !== id);
-      setIntegrations(updated);
-      if (!supabase) {
-        localStorage.setItem('integrations', JSON.stringify(updated));
-      }
+      await fetchIntegrations();
       showToast('Integration deleted successfully', 'success');
     } catch (error) {
       console.error('Error deleting integration:', error);
@@ -257,38 +213,19 @@ export default function Integrations() {
     if (typeof cfg.port !== 'number' || !Number.isFinite(cfg.port)) delete cfg.port;
 
     try {
-      if (supabase) {
-        const { data, error } = await supabase
-          .from('integrations')
-          .update({
-            name,
-            type,
-            config: cfg,
-            updated_at: new Date().toISOString()
-          })
-          .eq('id', editingId)
-          .select()
-          .single();
+      const response = await fetch(`/api/integrations/${editingId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name,
+          type,
+          config: cfg
+        })
+      });
 
-        if (error) throw error;
+      if (!response.ok) throw new Error('Failed to update integration');
 
-        setIntegrations(prev =>
-          prev.map(i => (i.id === editingId ? {
-            id: data.id,
-            name: data.name,
-            type: data.type,
-            status: data.status,
-            lastSync: data.last_sync,
-            config: data.config
-          } : i))
-        );
-      } else {
-        const updated = integrations.map(i =>
-          i.id === editingId ? { ...i, name, type, config: cfg } : i
-        );
-        setIntegrations(updated);
-        localStorage.setItem('integrations', JSON.stringify(updated));
-      }
+      await fetchIntegrations();
       cancelEdit();
       showToast('Integration updated successfully', 'success');
     } catch (error) {
@@ -323,19 +260,7 @@ export default function Integrations() {
 
       const updatedIntegration = await response.json();
 
-      // Also update Supabase if available
-      if (supabase) {
-        await supabase
-          .from('integrations')
-          .update({ status: next })
-          .eq('id', id);
-      }
-
-      const updated = integrations.map(i => (i.id === id ? { ...i, status: next } : i));
-      setIntegrations(updated);
-      if (!supabase) {
-        localStorage.setItem('integrations', JSON.stringify(updated));
-      }
+      await fetchIntegrations();
 
       if (next === 'connected') {
         showToast('Integration connected - setting up database schema...', 'info');
@@ -417,27 +342,16 @@ export default function Integrations() {
       const lastSync = result.success ? 'just now' : undefined;
 
       // Update in database
-      if (supabase) {
-        const { error } = await supabase
-          .from('integrations')
-          .update({
-            status: newStatus,
-            last_sync: lastSync
-          })
-          .eq('id', id);
+      await fetch(`/api/integrations/${id}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          status: newStatus,
+          last_sync: lastSync
+        })
+      });
 
-        if (error) throw error;
-      }
-
-      const updated = integrations.map(i =>
-        i.id === id
-          ? { ...i, status: newStatus, lastSync }
-          : i
-      );
-      setIntegrations(updated);
-      if (!supabase) {
-        localStorage.setItem('integrations', JSON.stringify(updated));
-      }
+      await fetchIntegrations();
 
       if (result.success) {
         showToast(result.message || 'Connection successful', 'success');
@@ -449,22 +363,12 @@ export default function Integrations() {
       const errorStatus: IntegrationStatus = 'error';
 
       try {
-        if (supabase) {
-          await supabase
-            .from('integrations')
-            .update({ status: errorStatus })
-            .eq('id', id);
-        }
-
-        const updated = integrations.map(i =>
-          i.id === id
-            ? { ...i, status: errorStatus }
-            : i
-        );
-        setIntegrations(updated);
-        if (!supabase) {
-          localStorage.setItem('integrations', JSON.stringify(updated));
-        }
+        await fetch(`/api/integrations/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ status: errorStatus })
+        });
+        await fetchIntegrations();
       } catch (dbError) {
         console.error('Failed to update status:', dbError);
       }
