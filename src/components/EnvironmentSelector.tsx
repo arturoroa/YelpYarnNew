@@ -57,6 +57,7 @@ export default function EnvironmentSelector({
   }>({});
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; type: 'success' | 'error' | 'info' }>>([]);
   const [availableIntegrations, setAvailableIntegrations] = useState<Array<{ id: string; name: string; type: string; status: string }>>([]);
+  const [deleteConfirmation, setDeleteConfirmation] = useState<{ id: string; name: string } | null>(null);
 
   const showToast = (message: string, type: 'success' | 'error' | 'info') => {
     const id = Date.now();
@@ -166,7 +167,7 @@ export default function EnvironmentSelector({
 
   const handleSaveEnvironment = () => {
     if (!formData.name || !formData.endpoints?.yelpBaseUrl) {
-      showToast('Please fill the required fields: Name and Yelp Base URL', 'error');
+      showToast('Please fill the required fields: Name and Base URL', 'error');
       return;
     }
 
@@ -214,9 +215,14 @@ export default function EnvironmentSelector({
     });
   };
 
-  const handleDeleteEnvironment = (id: string, envName: string) => {
-    // Show confirmation via state instead of confirm dialog
-    if (!window.confirm(`Delete environment "${envName}"?`)) return;
+  const confirmDelete = (id: string, envName: string) => {
+    setDeleteConfirmation({ id, name: envName });
+  };
+
+  const handleDeleteEnvironment = () => {
+    if (!deleteConfirmation) return;
+
+    const { id, name: envName } = deleteConfirmation;
 
     setEnvironments((prev) => {
       const remaining = prev.filter((env) => env.id !== id);
@@ -225,13 +231,14 @@ export default function EnvironmentSelector({
       if (selectedEnvironment?.id === id) {
         const nextActive = remaining.find((e) => e.isActive) || remaining[0];
         if (nextActive) onEnvironmentChange(nextActive);
-        else onEnvironmentChange({} as Environment); // none left; caller should handle nullables
+        else onEnvironmentChange({} as Environment);
       }
 
       return remaining;
     });
 
     showToast(`Environment "${envName}" deleted successfully`, 'success');
+    setDeleteConfirmation(null);
   };
 
   const handleSetActive = (environment: Environment) => {
@@ -361,7 +368,7 @@ export default function EnvironmentSelector({
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteEnvironment(environment.id, environment.name)}
+                    onClick={() => confirmDelete(environment.id, environment.name)}
                     className="p-2 text-gray-400 hover:text-red-600 transition-colors"
                     title="Delete Environment"
                     aria-label="Delete Environment"
@@ -434,149 +441,26 @@ export default function EnvironmentSelector({
                 />
               </div>
 
-              {/* API Endpoints */}
+              {/* Base URL */}
               <div>
-                <h4 className="text-md font-medium text-gray-900 mb-4">API Endpoints</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  {/** Yelp Base URL (required) */}
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Yelp Base URL <span className="text-red-500">*</span>
-                    </label>
-                    <input
-                      type="url"
-                      value={formData.endpoints?.yelpBaseUrl || ''}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          endpoints: {
-                            ...(prev.endpoints || emptyEndpoints()),
-                            yelpBaseUrl: e.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="https://www.yelp.com"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  {/* Remaining endpoints */}
-                  {[
-                    ['yelpMobileUrl', 'Mobile Yelp URL', 'https://m.yelp.com'],
-                    ['apiBaseUrl', 'API Base URL', 'https://api.yelp.com/v3'],
-                    ['searchApiUrl', 'Search API URL', 'https://api.yelp.com/v3/businesses/search'],
-                    ['gqlEndpoint', 'GQL Endpoint', 'https://www.yelp.com/gql'],
-                    ['adEventLogUrl', 'Ad Event Log URL', 'https://analytics.yelp.com/unified_ad_event_log'],
-                  ].map(([key, label, placeholder]) => (
-                    <div key={key}>
-                      <label className="block text-sm font-medium text-gray-700 mb-2">{label}</label>
-                      <input
-                        type="url"
-                        value={(formData.endpoints as any)?.[key] || ''}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            endpoints: {
-                              ...(prev.endpoints || emptyEndpoints()),
-                              [key]: e.target.value,
-                            } as Environment['endpoints'],
-                          }))
-                        }
-                        placeholder={placeholder as string}
-                        className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                    </div>
-                  ))}
-                </div>
-              </div>
-
-              {/* Credentials */}
-              <div>
-                <h4 className="text-md font-medium text-gray-900 mb-4">API Credentials</h4>
-                <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      API Key
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showCredentials.apiKey ? 'text' : 'password'}
-                        value={formData.credentials?.apiKey || ''}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            credentials: {
-                              ...(prev.credentials || emptyCredentials()),
-                              apiKey: e.target.value,
-                            },
-                          }))
-                        }
-                        placeholder="Enter API key"
-                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => toggleCredentialVisibility('apiKey')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        aria-label="Toggle API Key visibility"
-                      >
-                        {showCredentials.apiKey ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Client ID
-                    </label>
-                    <input
-                      type="text"
-                      value={formData.credentials?.clientId || ''}
-                      onChange={(e) =>
-                        setFormData((prev) => ({
-                          ...prev,
-                          credentials: {
-                            ...(prev.credentials || emptyCredentials()),
-                            clientId: e.target.value,
-                          },
-                        }))
-                      }
-                      placeholder="Enter client ID"
-                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                    />
-                  </div>
-
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 mb-2">
-                      Client Secret
-                    </label>
-                    <div className="relative">
-                      <input
-                        type={showCredentials.clientSecret ? 'text' : 'password'}
-                        value={formData.credentials?.clientSecret || ''}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            credentials: {
-                              ...(prev.credentials || emptyCredentials()),
-                              clientSecret: e.target.value,
-                            },
-                          }))
-                        }
-                        placeholder="Enter client secret"
-                        className="w-full px-3 py-2 pr-10 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
-                      />
-                      <button
-                        type="button"
-                        onClick={() => toggleCredentialVisibility('clientSecret')}
-                        className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600"
-                        aria-label="Toggle Client Secret visibility"
-                      >
-                        {showCredentials.clientSecret ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
-                      </button>
-                    </div>
-                  </div>
-                </div>
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                  Base URL <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="url"
+                  value={formData.endpoints?.yelpBaseUrl || ''}
+                  onChange={(e) =>
+                    setFormData((prev) => ({
+                      ...prev,
+                      endpoints: {
+                        ...emptyEndpoints(),
+                        yelpBaseUrl: e.target.value,
+                      },
+                    }))
+                  }
+                  placeholder="https://www.yelp.com"
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                />
               </div>
 
               {/* Integrations */}
@@ -734,6 +618,37 @@ export default function EnvironmentSelector({
                 className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 transition-colors"
               >
                 {editingEnvironment ? 'Update Environment' : 'Add Environment'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Delete Confirmation Modal */}
+      {deleteConfirmation && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-xl shadow-xl p-6 max-w-md w-full mx-4">
+            <div className="flex items-start space-x-3 mb-4">
+              <AlertTriangle className="w-6 h-6 text-red-500 mt-0.5" />
+              <div>
+                <h3 className="text-lg font-semibold text-gray-900 mb-2">Delete Environment</h3>
+                <p className="text-sm text-gray-600">
+                  Are you sure you want to delete the environment <strong>"{deleteConfirmation.name}"</strong>? This action cannot be undone.
+                </p>
+              </div>
+            </div>
+            <div className="flex justify-end space-x-3 mt-6">
+              <button
+                onClick={() => setDeleteConfirmation(null)}
+                className="px-4 py-2 text-gray-600 hover:text-gray-800 transition-colors"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleDeleteEnvironment}
+                className="px-4 py-2 bg-red-600 text-white rounded-lg hover:bg-red-700 transition-colors"
+              >
+                Delete
               </button>
             </div>
           </div>
