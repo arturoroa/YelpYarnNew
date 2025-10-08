@@ -271,27 +271,16 @@ export default function Integrations() {
 
       if (isBackendTimeout) {
         // Backend environment can't reach external hosts - save config as disconnected
-        if (supabase) {
-          const { error } = await supabase
-            .from('integrations')
-            .update({
-              status: 'disconnected',
-              last_sync: 'Config saved (not verified)'
-            })
-            .eq('id', id);
+        await fetch(`/api/integrations/${id}`, {
+          method: 'PUT',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            status: 'disconnected',
+            last_sync: 'Config saved (not verified)'
+          })
+        });
 
-          if (error) throw error;
-        }
-
-        const updated = integrations.map(i =>
-          i.id === id
-            ? { ...i, status: 'disconnected' as IntegrationStatus, lastSync: 'Config saved (not verified)' }
-            : i
-        );
-        setIntegrations(updated);
-        if (!supabase) {
-          localStorage.setItem('integrations', JSON.stringify(updated));
-        }
+        await fetchIntegrations();
 
         showToast(`Configuration saved for ${target.name}. Connection testing is unavailable in this environment due to network restrictions, but the configuration will be used when running tests.`, 'info');
         return;

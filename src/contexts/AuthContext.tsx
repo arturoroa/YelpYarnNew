@@ -65,14 +65,14 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       const ipAddress = getIpAddress();
       const sessionId = generateSessionId();
       const loginTime = new Date().toISOString();
-      
-      const authUser: AuthUser = { 
-        username, 
+
+      const authUser: AuthUser = {
+        username,
         loginTime,
         ipAddress,
         sessionId
       };
-      
+
       const newSession: AuthSession = {
         id: sessionId,
         username,
@@ -80,19 +80,38 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         ipAddress,
         status: 'active'
       };
-      
+
       // Actualizar usuario y sesión
       setUser(authUser);
       setIsAuthenticated(true);
-      
+
       // Añadir a historial
       const updatedHistory = [...sessionHistory, newSession];
       setSessionHistory(updatedHistory);
-      
+
       // Guardar en localStorage
       localStorage.setItem('authUser', JSON.stringify(authUser));
       localStorage.setItem('sessionHistory', JSON.stringify(updatedHistory));
-      
+
+      // Log system action
+      try {
+        await fetch('/api/system-logs', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            action: 'system_user_login',
+            details: {
+              username,
+              session_id: sessionId,
+              ip_address: ipAddress,
+              login_time: loginTime
+            }
+          })
+        });
+      } catch (error) {
+        console.error('Failed to log login action:', error);
+      }
+
       return true;
     }
     return false;
@@ -102,17 +121,33 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     if (user) {
       // Marcar la sesión actual como completada
       const logoutTime = new Date().toISOString();
-      
-      const updatedHistory = sessionHistory.map(session => 
-        session.id === user.sessionId 
-          ? { ...session, logoutTime, status: 'completed' as const } 
+
+      const updatedHistory = sessionHistory.map(session =>
+        session.id === user.sessionId
+          ? { ...session, logoutTime, status: 'completed' as const }
           : session
       );
-      
+
       setSessionHistory(updatedHistory);
       localStorage.setItem('sessionHistory', JSON.stringify(updatedHistory));
+
+      // Log system action
+      fetch('/api/system-logs', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          action: 'system_user_logout',
+          details: {
+            username: user.username,
+            session_id: user.sessionId,
+            logout_time: logoutTime
+          }
+        })
+      }).catch(error => {
+        console.error('Failed to log logout action:', error);
+      });
     }
-    
+
     // Cerrar sesión
     setUser(null);
     setIsAuthenticated(false);

@@ -1065,6 +1065,13 @@ app.post('/api/users/create', async (req, res) => {
   try {
     const userData = req.body;
     const user = appDb.createYelpUser(userData);
+
+    await logSystemAction(null, 'test_user_created', {
+      user_id: user.id,
+      username: user.username,
+      email: user.email
+    });
+
     res.json(user);
   } catch (error) {
     console.error('Error creating user:', error);
