@@ -3,11 +3,12 @@ import { FileText, RefreshCw, Download, Filter, Search } from 'lucide-react';
 import { apiGet } from '../lib/http';
 
 interface SystemLog {
-  message: string;
+  id: string;
+  user_id: string | null;
+  action: string;
+  details: any;
   timestamp: string;
-  level: string;
-  service?: string;
-  meta?: any;
+  created_at: string;
 }
 
 export default function SystemLogs() {
@@ -18,12 +19,15 @@ export default function SystemLogs() {
 
   useEffect(() => {
     fetchSystemLogs();
+    // Auto-refresh every 5 seconds
+    const interval = setInterval(fetchSystemLogs, 5000);
+    return () => clearInterval(interval);
   }, []);
 
   const fetchSystemLogs = async () => {
     setLoading(true);
     try {
-      const data = await apiGet<SystemLog[]>('/api/logs/system/recent?lines=200');
+      const data = await apiGet<SystemLog[]>('/api/system-logs');
       setLogs(data);
     } catch (error) {
       console.error('Failed to fetch system logs:', error);
@@ -32,31 +36,48 @@ export default function SystemLogs() {
     }
   };
 
-  const getLogLevelColor = (level: string) => {
-    switch (level) {
-      case 'error':
-        return 'bg-red-100 text-red-800 border-red-200';
-      case 'warn':
-        return 'bg-yellow-100 text-yellow-800 border-yellow-200';
-      case 'debug':
-        return 'bg-gray-100 text-gray-800 border-gray-200';
-      default:
-        return 'bg-blue-100 text-blue-800 border-blue-200';
+  const getActionColor = (action: string, details: any = {}) => {
+    if (action.includes('deleted') || action.includes('error')) {
+      return 'bg-red-100 text-red-800 border-red-200';
     }
+    if (action.includes('test')) {
+      const testResult = details?.test_result;
+      if (testResult === 'success') {
+        return 'bg-green-100 text-green-800 border-green-200';
+      } else if (testResult === 'failure' || testResult === 'error') {
+        return 'bg-red-100 text-red-800 border-red-200';
+      }
+      return 'bg-purple-100 text-purple-800 border-purple-200';
+    }
+    if (action.includes('updated') || action.includes('migrated')) {
+      return 'bg-yellow-100 text-yellow-800 border-yellow-200';
+    }
+    if (action.includes('created')) {
+      return 'bg-green-100 text-green-800 border-green-200';
+    }
+    return 'bg-blue-100 text-blue-800 border-blue-200';
   };
 
   const filteredLogs = logs.filter(log => {
-    const matchesFilter = filter === 'all' || log.level === filter;
-    const matchesSearch = searchTerm === '' || 
-      log.message.toLowerCase().includes(searchTerm.toLowerCase()) ||
-      (log.service && log.service.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+    const matchesFilter = filter === 'all' ||
+      (filter === 'created' && log.action.includes('created')) ||
+      (filter === 'updated' && log.action.includes('updated')) ||
+      (filter === 'deleted' && log.action.includes('deleted')) ||
+      (filter === 'test' && log.action.includes('test'));
+
+    const matchesSearch = searchTerm === '' ||
+      log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
+      JSON.stringify(log.details).toLowerCase().includes(searchTerm.toLowerCase());
+
     return matchesFilter && matchesSearch;
   });
 
   const logCounts = logs.reduce((acc, log) => {
-    acc[log.level] = (acc[log.level] || 0) + 1;
     acc.total = (acc.total || 0) + 1;
+    if (log.action.includes('created')) acc.created = (acc.created || 0) + 1;
+    if (log.action.includes('updated')) acc.updated = (acc.updated || 0) + 1;
+    if (log.action.includes('deleted')) acc.deleted = (acc.deleted || 0) + 1;
+    if (log.action.includes('test')) acc.test = (acc.test || 0) + 1;
     return acc;
   }, {} as Record<string, number>);
 
@@ -66,7 +87,7 @@ export default function SystemLogs() {
       <div className="flex items-center justify-between">
         <div>
           <h2 className="text-3xl font-bold text-gray-900">System Logs</h2>
-          <p className="text-gray-600 mt-1">Monitor application logs and system events</p>
+          <p className="text-gray-600 mt-1">Monitor application logs and integration events</p>
         </div>
         <div className="flex items-center space-x-4">
           <button
@@ -80,7 +101,7 @@ export default function SystemLogs() {
         </div>
       </div>
 
-      {/* Log Level Stats */}
+      {/* Log Stats */}
       <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between">
@@ -95,18 +116,18 @@ export default function SystemLogs() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600">Info</p>
-              <p className="text-xl font-bold text-blue-600">{logCounts.info || 0}</p>
+              <p className="text-xs font-medium text-gray-600">Created</p>
+              <p className="text-xl font-bold text-green-600">{logCounts.created || 0}</p>
             </div>
-            <div className="w-3 h-3 bg-blue-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-green-500 rounded-full"></div>
           </div>
         </div>
 
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600">Warnings</p>
-              <p className="text-xl font-bold text-yellow-600">{logCounts.warn || 0}</p>
+              <p className="text-xs font-medium text-gray-600">Updated</p>
+              <p className="text-xl font-bold text-yellow-600">{logCounts.updated || 0}</p>
             </div>
             <div className="w-3 h-3 bg-yellow-500 rounded-full"></div>
           </div>
@@ -115,8 +136,8 @@ export default function SystemLogs() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600">Errors</p>
-              <p className="text-xl font-bold text-red-600">{logCounts.error || 0}</p>
+              <p className="text-xs font-medium text-gray-600">Deleted</p>
+              <p className="text-xl font-bold text-red-600">{logCounts.deleted || 0}</p>
             </div>
             <div className="w-3 h-3 bg-red-500 rounded-full"></div>
           </div>
@@ -125,10 +146,10 @@ export default function SystemLogs() {
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-xs font-medium text-gray-600">Debug</p>
-              <p className="text-xl font-bold text-gray-600">{logCounts.debug || 0}</p>
+              <p className="text-xs font-medium text-gray-600">Tests</p>
+              <p className="text-xl font-bold text-purple-600">{logCounts.test || 0}</p>
             </div>
-            <div className="w-3 h-3 bg-gray-500 rounded-full"></div>
+            <div className="w-3 h-3 bg-purple-500 rounded-full"></div>
           </div>
         </div>
       </div>
@@ -139,21 +160,21 @@ export default function SystemLogs() {
           <div className="flex items-center space-x-4">
             <div className="flex items-center space-x-2">
               <Filter className="w-4 h-4 text-gray-500" />
-              <label className="text-sm font-medium text-gray-700">Filter by level:</label>
+              <label className="text-sm font-medium text-gray-700">Filter by action:</label>
               <select
                 value={filter}
                 onChange={(e) => setFilter(e.target.value)}
                 className="border border-gray-300 rounded-lg px-3 py-1 text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
               >
-                <option value="all">All Levels</option>
-                <option value="info">Info</option>
-                <option value="warn">Warnings</option>
-                <option value="error">Errors</option>
-                <option value="debug">Debug</option>
+                <option value="all">All Actions</option>
+                <option value="created">Created</option>
+                <option value="updated">Updated</option>
+                <option value="deleted">Deleted</option>
+                <option value="test">Tests</option>
               </select>
             </div>
           </div>
-          
+
           <div className="flex items-center space-x-2">
             <Search className="w-4 h-4 text-gray-500" />
             <input
@@ -196,38 +217,58 @@ export default function SystemLogs() {
             </div>
           ) : (
             <div className="divide-y divide-gray-200">
-              {filteredLogs.map((log, index) => (
-                <div key={index} className="p-4 hover:bg-gray-50">
+              {filteredLogs.map((log) => (
+                <div key={log.id} className="p-4 hover:bg-gray-50">
                   <div className="flex items-start space-x-3">
-                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded border ${getLogLevelColor(log.level)}`}>
-                      {log.level.toUpperCase()}
+                    <span className={`inline-flex px-2 py-1 text-xs font-medium rounded border ${getActionColor(log.action, log.details)}`}>
+                      {log.action.replace(/_/g, ' ').toUpperCase()}
                     </span>
-                    
+
                     <div className="flex-1 min-w-0">
                       <div className="flex items-center justify-between mb-1">
-                        <p className="text-sm font-medium text-gray-900 truncate">
-                          {log.message}
+                        <p className="text-sm font-medium text-gray-900">
+                          {log.action.replace(/_/g, ' ')}
                         </p>
                         <p className="text-xs text-gray-500 whitespace-nowrap ml-2">
                           {new Date(log.timestamp).toLocaleString()}
                         </p>
                       </div>
-                      
-                      {log.service && (
-                        <p className="text-xs text-gray-600 mb-1">
-                          Service: {log.service}
-                        </p>
-                      )}
-                      
-                      {log.meta && Object.keys(log.meta).length > 0 && (
-                        <details className="mt-2">
-                          <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">
-                            View metadata
-                          </summary>
-                          <pre className="mt-2 text-xs text-gray-600 bg-gray-100 p-2 rounded border overflow-x-auto">
-                            {JSON.stringify(log.meta, null, 2)}
-                          </pre>
-                        </details>
+
+                      {log.details && Object.keys(log.details).length > 0 && (
+                        <div className="mt-1">
+                          {log.details.integration_name && (
+                            <p className="text-xs text-gray-600">
+                              Integration: <span className="font-medium">{log.details.integration_name}</span>
+                            </p>
+                          )}
+                          {log.details.integration_type && (
+                            <p className="text-xs text-gray-600">
+                              Type: <span className="font-medium">{log.details.integration_type}</span>
+                            </p>
+                          )}
+                          {log.details.test_result && (
+                            <p className="text-xs text-gray-600">
+                              Test Result: <span className={`font-medium ${
+                                log.details.test_result === 'success' ? 'text-green-600' :
+                                log.details.test_result === 'failure' || log.details.test_result === 'error' ? 'text-red-600' :
+                                'text-gray-600'
+                              }`}>{log.details.test_result}</span>
+                            </p>
+                          )}
+                          {log.details.test_message && (
+                            <p className="text-xs text-gray-600 mt-1">
+                              Message: <span className="font-medium">{log.details.test_message}</span>
+                            </p>
+                          )}
+                          <details className="mt-2">
+                            <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">
+                              View full details
+                            </summary>
+                            <pre className="mt-2 text-xs text-gray-600 bg-gray-100 p-2 rounded border overflow-x-auto">
+                              {JSON.stringify(log.details, null, 2)}
+                            </pre>
+                          </details>
+                        </div>
                       )}
                     </div>
                   </div>
