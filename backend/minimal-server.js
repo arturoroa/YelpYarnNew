@@ -268,14 +268,23 @@ async function testDatabaseConnection(config, res) {
     if (dbProtocol.includes('postgres') || dbProtocol === 'postgresql') {
       const { Client } = pg;
 
-      const client = new Client({
+      const clientConfig = {
         host,
         port: actualPort,
         database: database || 'postgres',
         user: username || 'postgres',
         password: password || '',
         connectionTimeoutMillis: timeout,
-      });
+      };
+
+      // Add SSL configuration if enabled
+      if (config.ssl) {
+        clientConfig.ssl = {
+          rejectUnauthorized: false
+        };
+      }
+
+      const client = new Client(clientConfig);
 
       try {
         await client.connect();
@@ -311,14 +320,23 @@ async function testDatabaseConnection(config, res) {
       }
     } else if (dbProtocol.includes('mysql')) {
       try {
-        const connection = await mysql.createConnection({
+        const mysqlConfig = {
           host,
           port: actualPort,
           database: database || 'mysql',
           user: username || 'root',
           password: password || '',
           connectTimeout: timeout,
-        });
+        };
+
+        // Add SSL configuration if enabled
+        if (config.ssl) {
+          mysqlConfig.ssl = {
+            rejectUnauthorized: false
+          };
+        }
+
+        const connection = await mysql.createConnection(mysqlConfig);
 
         await connection.query('SELECT 1');
         await connection.end();
