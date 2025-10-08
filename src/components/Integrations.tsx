@@ -346,6 +346,8 @@ export default function Integrations() {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
+          id: target.id,
+          name: target.name,
           type: target.type,
           config: target.config
         })

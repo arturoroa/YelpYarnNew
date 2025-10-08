@@ -199,7 +199,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
 // Endpoint para probar conexiones de integración
 app.post('/api/integrations/test-connection', async (req, res) => {
   console.log('Testing connection for integration:', req.body.type);
-  const { type, config } = req.body;
+  const { id, type, config, name } = req.body;
 
   if (!type || !config) {
     return res.status(400).json({
@@ -208,22 +208,67 @@ app.post('/api/integrations/test-connection', async (req, res) => {
     });
   }
 
+  const testStartTime = new Date().toISOString();
+
+  // Store original res.json to intercept response
+  const originalJson = res.json.bind(res);
+  let testResult = null;
+
+  res.json = function(data) {
+    testResult = data;
+    return originalJson(data);
+  };
+
   try {
     switch (type) {
       case 'database':
-        return await testDatabaseConnection(config, res);
+        await testDatabaseConnection(config, res);
+        break;
       case 'proxy':
-        return await testProxyConnection(config, res);
+        await testProxyConnection(config, res);
+        break;
       case 'vpn':
-        return await testVpnConnection(config, res);
+        await testVpnConnection(config, res);
+        break;
       default:
         return res.status(400).json({
           success: false,
           error: `Unknown integration type: ${type}`
         });
     }
+
+    // Log the test result after response is sent
+    if (testResult) {
+      setImmediate(async () => {
+        await logSystemAction(null, 'integration_test', {
+          integration_id: id || null,
+          integration_name: name || 'Unknown',
+          integration_type: type,
+          test_start_time: testStartTime,
+          test_end_time: new Date().toISOString(),
+          test_result: testResult.success ? 'success' : 'failure',
+          test_message: testResult.message || testResult.error,
+          test_details: config
+        });
+      });
+    }
   } catch (error) {
     console.error('Connection test error:', error);
+
+    // Log the failed test
+    setImmediate(async () => {
+      await logSystemAction(null, 'integration_test', {
+        integration_id: id || null,
+        integration_name: name || 'Unknown',
+        integration_type: type,
+        test_start_time: testStartTime,
+        test_end_time: new Date().toISOString(),
+        test_result: 'error',
+        test_message: error.message,
+        test_details: config
+      });
+    });
+
     if (!res.headersSent) {
       return res.status(500).json({
         success: false,
