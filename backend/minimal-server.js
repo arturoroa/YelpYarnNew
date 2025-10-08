@@ -27,8 +27,15 @@ try {
 
 dotenv.config();
 
-// Initialize in-memory database as default storage
-const appDb = new AppDatabase();
+// Initialize SQLite database with defaultRecorder.db
+let appDb = null;
+try {
+  const { DefaultRecorderDB } = await import('./database/DefaultRecorderDB.js');
+  appDb = new DefaultRecorderDB();
+} catch (error) {
+  console.log('! Failed to initialize DefaultRecorderDB, falling back to in-memory');
+  appDb = new AppDatabase();
+}
 
 // Supabase is now optional - only initialize if credentials are provided
 let supabase = null;
@@ -45,6 +52,32 @@ if (process.env.VITE_SUPABASE_URL && process.env.VITE_SUPABASE_ANON_KEY) {
   }
 } else {
   console.log('! Supabase not configured - using SQLite only');
+}
+
+// Helper function to log actions to both local DB and Supabase
+async function logSystemAction(userId, action, details = {}) {
+  // Always log to local database
+  try {
+    if (appDb && typeof appDb.logSystemAction === 'function') {
+      appDb.logSystemAction(userId, action, details);
+    }
+  } catch (error) {
+    console.error('Failed to log to local database:', error);
+  }
+
+  // Also log to Supabase if available
+  if (supabase) {
+    try {
+      await supabase.from('system_logs').insert({
+        user_id: userId || null,
+        action,
+        details,
+        timestamp: new Date().toISOString()
+      });
+    } catch (error) {
+      console.error('Failed to log to Supabase:', error);
+    }
+  }
 }
 
 // Crear aplicación Express
@@ -92,6 +125,13 @@ app.post('/api/integrations', async (req, res) => {
       config: config || {}
     });
 
+    // Log the action
+    await logSystemAction(null, 'integration_created', {
+      integration_id: integration.id,
+      integration_name: name,
+      integration_type: type
+    });
+
     res.status(201).json(integration);
   } catch (error) {
     console.error('Error creating integration:', error);
@@ -112,6 +152,14 @@ app.put('/api/integrations/:id', async (req, res) => {
     if (last_sync !== undefined) updateData.last_sync = last_sync;
 
     const integration = appDb.updateIntegration(id, updateData);
+
+    // Log the action
+    await logSystemAction(null, 'integration_updated', {
+      integration_id: id,
+      integration_name: integration.name,
+      updated_fields: Object.keys(updateData)
+    });
+
     res.json(integration);
   } catch (error) {
     console.error('Error updating integration:', error);
@@ -124,11 +172,21 @@ app.delete('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     console.log('Deleting integration with id:', id);
 
+    // Get integration details before deleting
+    const integrations = appDb.getIntegrations ? appDb.getIntegrations() : appDb.getAllIntegrations();
+    const integration = integrations.find(i => i.id === id);
     const deleted = appDb.deleteIntegration(id);
 
     if (!deleted) {
       return res.status(404).json({ error: 'Integration not found' });
     }
+
+    // Log the action
+    await logSystemAction(null, 'integration_deleted', {
+      integration_id: id,
+      integration_name: integration?.name,
+      integration_type: integration?.type
+    });
 
     console.log('Successfully deleted integration');
     res.json({ success: true });
@@ -800,6 +858,126 @@ app.post('/api/users/create', async (req, res) => {
   } catch (error) {
     console.error('Error creating user:', error);
     res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+// Migrate data from defaultRecorder.db to active integration
+app.post('/api/integrations/:id/migrate', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const integration = appDb.getIntegration ? appDb.getIntegration(id) : null;
+
+    if (!integration) {
+      return res.status(404).json({ error: 'Integration not found' });
+    }
+
+    if (integration.type !== 'database') {
+      return res.status(400).json({ error: 'Only database integrations can be migrated to' });
+    }
+
+    const { DataMigrator } = await import('./database/DataMigrator.js');
+    const migrator = new DataMigrator(appDb);
+
+    const config = integration.config;
+    const dbProtocol = config.connectionString?.split(':')[0] || config.type || 'sqlite';
+
+    let result;
+
+    if (dbProtocol.includes('postgres') || dbProtocol === 'postgresql') {
+      const { Client } = pg;
+      const client = new Client({
+        host: config.host,
+        port: parseInt(config.port) || 5432,
+        database: config.database,
+        user: config.username,
+        password: config.password,
+        ssl: config.ssl ? { rejectUnauthorized: false, requestCert: true } : false
+      });
+
+      await client.connect();
+      result = await migrator.migrateToPostgres(client);
+      await client.end();
+
+    } else if (dbProtocol.includes('mysql')) {
+      const connection = await mysql.createConnection({
+        host: config.host,
+        port: parseInt(config.port) || 3306,
+        database: config.database,
+        user: config.username,
+        password: config.password,
+        ssl: config.ssl ? { rejectUnauthorized: false } : false
+      });
+
+      result = await migrator.migrateToMySQL(connection);
+      await connection.end();
+
+    } else {
+      return res.status(400).json({ error: 'Unsupported database type for migration' });
+    }
+
+    // Log the migration
+    await logSystemAction(null, 'data_migrated', {
+      integration_id: id,
+      integration_name: integration.name,
+      records_migrated: result.migrated
+    });
+
+    res.json(result);
+  } catch (error) {
+    console.error('Migration error:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// Get system logs from local database and/or Supabase
+app.get('/api/system-logs', async (req, res) => {
+  try {
+    let localLogs = [];
+    let supabaseLogs = [];
+
+    // Get logs from local database
+    if (appDb && typeof appDb.getSystemLogs === 'function') {
+      try {
+        localLogs = appDb.getSystemLogs(100);
+      } catch (error) {
+        console.error('Error fetching local logs:', error);
+      }
+    }
+
+    // Get logs from Supabase
+    if (supabase) {
+      try {
+        const { data, error } = await supabase
+          .from('system_logs')
+          .select('*')
+          .order('timestamp', { ascending: false })
+          .limit(100);
+
+        if (!error && data) {
+          supabaseLogs = data;
+        }
+      } catch (error) {
+        console.error('Error fetching Supabase logs:', error);
+      }
+    }
+
+    // Combine and deduplicate logs by id, prioritize local logs
+    const logsMap = new Map();
+
+    localLogs.forEach(log => logsMap.set(log.id, log));
+    supabaseLogs.forEach(log => {
+      if (!logsMap.has(log.id)) {
+        logsMap.set(log.id, log);
+      }
+    });
+
+    const combinedLogs = Array.from(logsMap.values())
+      .sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+    res.json(combinedLogs);
+  } catch (error) {
+    console.error('Error fetching system logs:', error);
+    res.status(500).json({ error: error.message });
   }
 });
 
