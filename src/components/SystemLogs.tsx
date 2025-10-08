@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { FileText, RefreshCw, Download, Filter, Search } from 'lucide-react';
 import { apiGet } from '../lib/http';
 
@@ -17,7 +17,7 @@ export default function SystemLogs() {
   const [filter, setFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
-  const scrollContainerRef = React.useRef<HTMLDivElement>(null);
+  const scrollContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     fetchSystemLogs();
@@ -27,24 +27,21 @@ export default function SystemLogs() {
   }, []);
 
   const fetchSystemLogs = async () => {
-    // Save current scroll position
+    // Save current scroll position before fetching
     const scrollPosition = scrollContainerRef.current?.scrollTop || 0;
 
-    setLoading(true);
     try {
       const data = await apiGet<SystemLog[]>('/api/system-logs');
       setLogs(data);
 
-      // Restore scroll position after state update
-      setTimeout(() => {
-        if (scrollContainerRef.current) {
+      // Restore scroll position after render
+      requestAnimationFrame(() => {
+        if (scrollContainerRef.current && scrollPosition > 0) {
           scrollContainerRef.current.scrollTop = scrollPosition;
         }
-      }, 0);
+      });
     } catch (error) {
       console.error('Failed to fetch system logs:', error);
-    } finally {
-      setLoading(false);
     }
   };
 

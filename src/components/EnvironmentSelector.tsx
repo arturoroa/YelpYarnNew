@@ -48,17 +48,41 @@ export default function EnvironmentSelector({
     description: '',
     endpoints: emptyEndpoints(),
     credentials: emptyCredentials(),
+    integrations: {},
     isActive: false,
   });
   const [showCredentials, setShowCredentials] = useState<{
     apiKey?: boolean;
     clientSecret?: boolean;
   }>({});
+  const [toasts, setToasts] = useState<Array<{ id: number; message: string; type: 'success' | 'error' | 'info' }>>([]);
+  const [availableIntegrations, setAvailableIntegrations] = useState<Array<{ id: string; name: string; type: string; status: string }>>([]);
+
+  const showToast = (message: string, type: 'success' | 'error' | 'info') => {
+    const id = Date.now();
+    setToasts(prev => [...prev, { id, message, type }]);
+    setTimeout(() => {
+      setToasts(prev => prev.filter(t => t.id !== id));
+    }, 4000);
+  };
 
   useEffect(() => {
     loadEnvironments();
+    fetchIntegrations();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  const fetchIntegrations = async () => {
+    try {
+      const response = await fetch('/api/integrations');
+      if (response.ok) {
+        const data = await response.json();
+        setAvailableIntegrations(data);
+      }
+    } catch (error) {
+      console.error('Failed to fetch integrations:', error);
+    }
+  };
 
   const loadEnvironments = () => {
     // Mock data (replace with API)
@@ -142,7 +166,7 @@ export default function EnvironmentSelector({
 
   const handleSaveEnvironment = () => {
     if (!formData.name || !formData.endpoints?.yelpBaseUrl) {
-      alert('Please fill the required fields: Name and Yelp Base URL.');
+      showToast('Please fill the required fields: Name and Yelp Base URL', 'error');
       return;
     }
 
@@ -185,12 +209,14 @@ export default function EnvironmentSelector({
       description: '',
       endpoints: emptyEndpoints(),
       credentials: emptyCredentials(),
+      integrations: {},
       isActive: false,
     });
   };
 
-  const handleDeleteEnvironment = (id: string) => {
-    if (!confirm('Delete this environment?')) return;
+  const handleDeleteEnvironment = (id: string, envName: string) => {
+    // Show confirmation via state instead of confirm dialog
+    if (!window.confirm(`Delete environment "${envName}"?`)) return;
 
     setEnvironments((prev) => {
       const remaining = prev.filter((env) => env.id !== id);
@@ -204,6 +230,8 @@ export default function EnvironmentSelector({
 
       return remaining;
     });
+
+    showToast(`Environment "${envName}" deleted successfully`, 'success');
   };
 
   const handleSetActive = (environment: Environment) => {
@@ -333,7 +361,7 @@ export default function EnvironmentSelector({
                     <Pencil className="w-4 h-4" />
                   </button>
                   <button
-                    onClick={() => handleDeleteEnvironment(environment.id)}
+                    onClick={() => handleDeleteEnvironment(environment.id, environment.name)}
                     className="p-2 text-gray-400 hover:text-red-600 transition-colors"
                     title="Delete Environment"
                     aria-label="Delete Environment"
@@ -551,6 +579,102 @@ export default function EnvironmentSelector({
                 </div>
               </div>
 
+              {/* Integrations */}
+              <div>
+                <h4 className="text-md font-medium text-gray-900 mb-4">Integrations</h4>
+                <p className="text-sm text-gray-600 mb-4">
+                  Select integrations to use with this environment. Maximum one of each type.
+                </p>
+                <div className="grid grid-cols-1 gap-4">
+                  {/* Database Integration */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Database Integration
+                    </label>
+                    <select
+                      value={formData.integrations?.database || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          integrations: {
+                            ...(prev.integrations || {}),
+                            database: e.target.value || undefined,
+                          },
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- None --</option>
+                      {availableIntegrations
+                        .filter(i => i.type === 'database' && i.status === 'connected')
+                        .map(integration => (
+                          <option key={integration.id} value={integration.id}>
+                            {integration.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* API Integration */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      API Integration
+                    </label>
+                    <select
+                      value={formData.integrations?.api || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          integrations: {
+                            ...(prev.integrations || {}),
+                            api: e.target.value || undefined,
+                          },
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- None --</option>
+                      {availableIntegrations
+                        .filter(i => i.type === 'api' && i.status === 'connected')
+                        .map(integration => (
+                          <option key={integration.id} value={integration.id}>
+                            {integration.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+
+                  {/* Webhook Integration */}
+                  <div>
+                    <label className="block text-sm font-medium text-gray-700 mb-2">
+                      Webhook Integration
+                    </label>
+                    <select
+                      value={formData.integrations?.webhook || ''}
+                      onChange={(e) =>
+                        setFormData((prev) => ({
+                          ...prev,
+                          integrations: {
+                            ...(prev.integrations || {}),
+                            webhook: e.target.value || undefined,
+                          },
+                        }))
+                      }
+                      className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
+                    >
+                      <option value="">-- None --</option>
+                      {availableIntegrations
+                        .filter(i => i.type === 'webhook' && i.status === 'connected')
+                        .map(integration => (
+                          <option key={integration.id} value={integration.id}>
+                            {integration.name}
+                          </option>
+                        ))}
+                    </select>
+                  </div>
+                </div>
+              </div>
+
               {/* Active Status */}
               <div>
                 <label className="flex items-center space-x-3 cursor-pointer">
@@ -597,6 +721,7 @@ export default function EnvironmentSelector({
                     description: '',
                     endpoints: emptyEndpoints(),
                     credentials: emptyCredentials(),
+                    integrations: {},
                     isActive: false,
                   });
                 }}
@@ -614,6 +739,22 @@ export default function EnvironmentSelector({
           </div>
         </div>
       )}
+
+      {/* Toast Notifications */}
+      <div className="fixed bottom-4 right-4 z-50 space-y-2">
+        {toasts.map(toast => (
+          <div
+            key={toast.id}
+            className={`px-6 py-3 rounded-lg shadow-lg text-white animate-fade-in ${
+              toast.type === 'success' ? 'bg-green-600' :
+              toast.type === 'error' ? 'bg-red-600' :
+              'bg-blue-600'
+            }`}
+          >
+            {toast.message}
+          </div>
+        ))}
+      </div>
     </div>
   );
 }

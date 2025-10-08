@@ -87,5 +87,10 @@ export interface Environment {
     clientId?: string;
     clientSecret?: string;
   };
+  integrations?: {
+    database?: string;
+    api?: string;
+    webhook?: string;
+  };
   isActive: boolean;
 }
