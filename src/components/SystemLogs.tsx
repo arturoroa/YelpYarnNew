@@ -16,6 +16,7 @@ export default function SystemLogs() {
   const [loading, setLoading] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
+  const [expandedLogs, setExpandedLogs] = useState<Set<string>>(new Set());
 
   useEffect(() => {
     fetchSystemLogs();
@@ -34,6 +35,18 @@ export default function SystemLogs() {
     } finally {
       setLoading(false);
     }
+  };
+
+  const toggleLogDetails = (logId: string) => {
+    setExpandedLogs(prev => {
+      const newSet = new Set(prev);
+      if (newSet.has(logId)) {
+        newSet.delete(logId);
+      } else {
+        newSet.add(logId);
+      }
+      return newSet;
+    });
   };
 
   const getActionColor = (action: string, details: any = {}) => {
@@ -260,14 +273,19 @@ export default function SystemLogs() {
                               Message: <span className="font-medium">{log.details.test_message}</span>
                             </p>
                           )}
-                          <details className="mt-2">
-                            <summary className="text-xs text-blue-600 cursor-pointer hover:text-blue-800">
-                              View full details
-                            </summary>
-                            <pre className="mt-2 text-xs text-gray-600 bg-gray-100 p-2 rounded border overflow-x-auto">
-                              {JSON.stringify(log.details, null, 2)}
-                            </pre>
-                          </details>
+                          <div className="mt-2">
+                            <button
+                              onClick={() => toggleLogDetails(log.id)}
+                              className="text-xs text-blue-600 cursor-pointer hover:text-blue-800 focus:outline-none"
+                            >
+                              {expandedLogs.has(log.id) ? '▼ Hide details' : '▶ View full details'}
+                            </button>
+                            {expandedLogs.has(log.id) && (
+                              <pre className="mt-2 text-xs text-gray-600 bg-gray-100 p-2 rounded border overflow-x-auto">
+                                {JSON.stringify(log.details, null, 2)}
+                              </pre>
+                            )}
+                          </div>
                         </div>
                       )}
                     </div>
