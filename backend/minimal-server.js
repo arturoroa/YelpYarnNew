@@ -168,32 +168,14 @@ function getPrimaryIntegration() {
 }
 
 // CRUD Endpoints for Integrations
+// Integration metadata is ALWAYS stored in DefaultRecorderDB (local SQLite)
 app.get('/api/integrations', async (req, res) => {
   try {
-    // Get primary database integration
-    const primary = getPrimaryIntegration();
-
-    if (!primary) {
-      // Use local SQLite (DefaultRecorderDB)
-      if (!appDb || !appDb.getAllIntegrations) {
-        return res.json([]);
-      }
-      const integrations = appDb.getAllIntegrations();
-      return res.json(integrations);
+    if (!appDb || !appDb.getAllIntegrations) {
+      return res.json([]);
     }
-
-    // Use primary database integration
-    const { IntegrationDB } = await import('./database/IntegrationDB.js');
-    const db = new IntegrationDB(primary);
-
-    try {
-      const integrations = await db.getAllIntegrations();
-      await db.disconnect();
-      res.json(integrations);
-    } catch (error) {
-      await db.disconnect();
-      throw error;
-    }
+    const integrations = appDb.getAllIntegrations();
+    res.json(integrations);
   } catch (error) {
     console.error('Error fetching integrations:', error);
     res.status(500).json({ error: error.message });
@@ -208,31 +190,11 @@ app.post('/api/integrations', async (req, res) => {
       return res.status(400).json({ error: 'Name and type are required' });
     }
 
-    // Get primary database integration
-    const primary = getPrimaryIntegration();
-
-    let newIntegration;
-
-    if (!primary) {
-      // Use local SQLite (DefaultRecorderDB)
-      if (!appDb || !appDb.createIntegration) {
-        return res.status(500).json({ error: 'Database not initialized' });
-      }
-
-      newIntegration = appDb.createIntegration({ name, type, status: 'disconnected', config: config || {} });
-    } else {
-      // Use primary database integration
-      const { IntegrationDB } = await import('./database/IntegrationDB.js');
-      const db = new IntegrationDB(primary);
-
-      try {
-        newIntegration = await db.createIntegration({ name, type, status: 'disconnected', config: config || {} });
-        await db.disconnect();
-      } catch (error) {
-        await db.disconnect();
-        throw error;
-      }
+    if (!appDb || !appDb.createIntegration) {
+      return res.status(500).json({ error: 'Database not initialized' });
     }
+
+    const newIntegration = appDb.createIntegration({ name, type, status: 'disconnected', config: config || {} });
 
     // Log the action
     await logSystemAction(null, 'integration_created', {
@@ -253,10 +215,10 @@ app.put('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     const { name, type, config, status, last_sync } = req.body;
 
-    // Get primary database integration
-    const primary = getPrimaryIntegration();
+    if (!appDb || !appDb.updateIntegration) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
 
-    let integration;
     const updateData = {};
     if (name !== undefined) updateData.name = name;
     if (type !== undefined) updateData.type = type;
@@ -264,33 +226,7 @@ app.put('/api/integrations/:id', async (req, res) => {
     if (status !== undefined) updateData.status = status;
     if (last_sync !== undefined) updateData.last_sync = last_sync;
 
-    if (!primary) {
-      // Use local SQLite (DefaultRecorderDB)
-      if (!appDb || !appDb.updateIntegration) {
-        return res.status(500).json({ error: 'Database not initialized' });
-      }
-
-      integration = appDb.updateIntegration(id, updateData);
-    } else {
-      // Use primary database integration
-      const { IntegrationDB } = await import('./database/IntegrationDB.js');
-      const db = new IntegrationDB(primary);
-
-      try {
-        const updateData = {};
-        if (name !== undefined) updateData.name = name;
-        if (type !== undefined) updateData.type = type;
-        if (config !== undefined) updateData.config = config;
-        if (status !== undefined) updateData.status = status;
-        if (last_sync !== undefined) updateData.last_sync = last_sync;
-
-        integration = await db.updateIntegration(id, updateData);
-        await db.disconnect();
-      } catch (error) {
-        await db.disconnect();
-        throw error;
-      }
-    }
+    const integration = appDb.updateIntegration(id, updateData);
 
     // Log the action
     await logSystemAction(null, 'integration_updated', {
@@ -366,44 +302,18 @@ app.delete('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     console.log('Deleting integration with id:', id);
 
-    // Get primary database integration
-    const primary = getPrimaryIntegration();
+    if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
 
-    let integration;
+    const integration = appDb.getIntegration(id);
+    if (!integration) {
+      return res.status(404).json({ error: 'Integration not found' });
+    }
 
-    if (!primary) {
-      // Use local SQLite (DefaultRecorderDB)
-      if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
-        return res.status(500).json({ error: 'Database not initialized' });
-      }
-
-      integration = appDb.getIntegration(id);
-      if (!integration) {
-        return res.status(404).json({ error: 'Integration not found' });
-      }
-
-      const deleted = appDb.deleteIntegration(id);
-      if (!deleted) {
-        return res.status(500).json({ error: 'Failed to delete integration' });
-      }
-    } else {
-      // Use primary database integration
-      const { IntegrationDB } = await import('./database/IntegrationDB.js');
-      const db = new IntegrationDB(primary);
-
-      try {
-        integration = await db.getIntegration(id);
-        if (!integration) {
-          await db.disconnect();
-          return res.status(404).json({ error: 'Integration not found' });
-        }
-
-        await db.deleteIntegration(id);
-        await db.disconnect();
-      } catch (error) {
-        await db.disconnect();
-        throw error;
-      }
+    const deleted = appDb.deleteIntegration(id);
+    if (!deleted) {
+      return res.status(500).json({ error: 'Failed to delete integration' });
     }
 
     // Log the action
