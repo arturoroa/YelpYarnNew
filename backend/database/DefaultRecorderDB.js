@@ -410,7 +410,7 @@ export class DefaultRecorderDB {
   }
 
   verifyUser(username, password) {
-    const stmt = this.db.prepare('SELECT * FROM users WHERE username = ? AND password = ? AND (type_of_user = "SystemUser" OR type_of_user = "RegularUser")');
+    const stmt = this.db.prepare("SELECT * FROM users WHERE username = ? AND password = ? AND (type_of_user = 'SystemUser' OR type_of_user = 'RegularUser')");
     const user = stmt.get(username, password);
     return user || null;
   }
