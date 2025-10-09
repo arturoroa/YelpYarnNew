@@ -106,6 +106,11 @@ export class IntegrationDB {
 
     try {
       if (this.dbType === 'sqlite') {
+        const tableExists = this.connection.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='integrations'"
+        ).get();
+        if (!tableExists) return [];
+
         const stmt = this.connection.prepare('SELECT * FROM integrations ORDER BY created_at DESC');
         const rows = stmt.all();
         return rows.map(row => ({
@@ -113,12 +118,22 @@ export class IntegrationDB {
           config: row.config ? JSON.parse(row.config) : {}
         }));
       } else if (this.dbType === 'postgresql') {
+        const tableCheck = await this.connection.query(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'integrations')"
+        );
+        if (!tableCheck.rows[0].exists) return [];
+
         const result = await this.connection.query('SELECT * FROM integrations ORDER BY created_at DESC');
         return result.rows.map(row => ({
           ...row,
           config: typeof row.config === 'string' ? JSON.parse(row.config) : row.config
         }));
       } else if (this.dbType === 'mysql') {
+        const [tableCheck] = await this.connection.query(
+          "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'integrations'"
+        );
+        if (tableCheck[0].count === 0) return [];
+
         const [rows] = await this.connection.query('SELECT * FROM integrations ORDER BY created_at DESC');
         return rows.map(row => ({
           ...row,
@@ -270,6 +285,11 @@ export class IntegrationDB {
     try {
       let rows;
       if (this.dbType === 'sqlite') {
+        const tableExists = this.connection.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='system_logs'"
+        ).get();
+        if (!tableExists) return [];
+
         const stmt = this.connection.prepare(`
           SELECT * FROM system_logs
           ORDER BY timestamp DESC
@@ -277,6 +297,11 @@ export class IntegrationDB {
         `);
         rows = stmt.all(limit);
       } else if (this.dbType === 'postgresql') {
+        const tableCheck = await this.connection.query(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'system_logs')"
+        );
+        if (!tableCheck.rows[0].exists) return [];
+
         const result = await this.connection.query(`
           SELECT * FROM system_logs
           ORDER BY timestamp DESC
@@ -284,6 +309,11 @@ export class IntegrationDB {
         `, [limit]);
         rows = result.rows;
       } else if (this.dbType === 'mysql') {
+        const [tableCheck] = await this.connection.query(
+          "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'system_logs'"
+        );
+        if (tableCheck[0].count === 0) return [];
+
         const [results] = await this.connection.query(`
           SELECT * FROM system_logs
           ORDER BY timestamp DESC
@@ -307,12 +337,27 @@ export class IntegrationDB {
     try {
       let rows;
       if (this.dbType === 'sqlite') {
+        const tableExists = this.connection.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='test_sessions'"
+        ).get();
+        if (!tableExists) return [];
+
         const stmt = this.connection.prepare('SELECT * FROM test_sessions ORDER BY created_at DESC');
         rows = stmt.all();
       } else if (this.dbType === 'postgresql') {
+        const tableCheck = await this.connection.query(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'test_sessions')"
+        );
+        if (!tableCheck.rows[0].exists) return [];
+
         const result = await this.connection.query('SELECT * FROM test_sessions ORDER BY created_at DESC');
         rows = result.rows;
       } else if (this.dbType === 'mysql') {
+        const [tableCheck] = await this.connection.query(
+          "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'test_sessions'"
+        );
+        if (tableCheck[0].count === 0) return [];
+
         const [results] = await this.connection.query('SELECT * FROM test_sessions ORDER BY created_at DESC');
         rows = results;
       }
@@ -333,12 +378,27 @@ export class IntegrationDB {
     try {
       let rows;
       if (this.dbType === 'sqlite') {
+        const tableExists = this.connection.prepare(
+          "SELECT name FROM sqlite_master WHERE type='table' AND name='yelp_users'"
+        ).get();
+        if (!tableExists) return [];
+
         const stmt = this.connection.prepare('SELECT * FROM yelp_users ORDER BY created_at DESC');
         rows = stmt.all();
       } else if (this.dbType === 'postgresql') {
+        const tableCheck = await this.connection.query(
+          "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'yelp_users')"
+        );
+        if (!tableCheck.rows[0].exists) return [];
+
         const result = await this.connection.query('SELECT * FROM yelp_users ORDER BY created_at DESC');
         rows = result.rows;
       } else if (this.dbType === 'mysql') {
+        const [tableCheck] = await this.connection.query(
+          "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'yelp_users'"
+        );
+        if (tableCheck[0].count === 0) return [];
+
         const [results] = await this.connection.query('SELECT * FROM yelp_users ORDER BY created_at DESC');
         rows = results;
       }
