@@ -352,6 +352,14 @@ app.post('/api/integrations', async (req, res) => {
     res.status(201).json(newIntegration);
   } catch (error) {
     console.error('Error creating integration:', error);
+
+    // Log the error
+    await logSystemAction(null, 'integration_creation_failed', {
+      integration_name: req.body.name,
+      integration_type: req.body.type,
+      error: error.message
+    });
+
     res.status(500).json({ error: error.message });
   }
 });
@@ -439,6 +447,13 @@ app.put('/api/integrations/:id', async (req, res) => {
     res.json(integration);
   } catch (error) {
     console.error('Error updating integration:', error);
+
+    // Log the error
+    await logSystemAction(null, 'integration_update_failed', {
+      integration_id: req.params.id,
+      error: error.message
+    });
+
     res.status(500).json({ error: error.message });
   }
 });
@@ -467,6 +482,16 @@ app.delete('/api/integrations/:id', async (req, res) => {
 
       if (usedInEnvironments.length > 0) {
         const envNames = usedInEnvironments.map(env => env.name).join(', ');
+
+        // Log the failed deletion attempt
+        await logSystemAction(null, 'integration_deletion_blocked', {
+          integration_id: id,
+          integration_name: integration?.name,
+          integration_type: integration?.type,
+          reason: 'Integration in use',
+          used_in_environments: envNames
+        });
+
         return res.status(400).json({
           error: `Cannot delete integration. It is currently used in the following environments: ${envNames}`,
           environmentNames: envNames
@@ -490,6 +515,13 @@ app.delete('/api/integrations/:id', async (req, res) => {
     res.json({ success: true });
   } catch (error) {
     console.error('Error deleting integration:', error);
+
+    // Log the error
+    await logSystemAction(null, 'integration_deletion_failed', {
+      integration_id: req.params.id,
+      error: error.message
+    });
+
     res.status(500).json({ error: error.message });
   }
 });
@@ -1166,9 +1198,24 @@ app.post('/api/tests/start', async (req, res) => {
   try {
     const sessionData = req.body;
     const session = appDb.createTestSession(sessionData);
+
+    // Log test session start
+    await logSystemAction(null, 'test_session_started', {
+      session_id: session.id,
+      integration_id: sessionData.integration_id,
+      yelp_user_id: sessionData.yelp_user_id,
+      environment: sessionData.environment
+    });
+
     res.json(session);
   } catch (error) {
     console.error('Error starting test session:', error);
+
+    // Log the error
+    await logSystemAction(null, 'test_session_start_failed', {
+      error: error.message
+    });
+
     res.status(500).json({ error: 'Failed to start test session' });
   }
 });
@@ -1194,9 +1241,23 @@ app.post('/api/tests/stop/:sessionId', async (req, res) => {
       status: 'stopped',
       completed_at: new Date().toISOString()
     });
+
+    // Log test session stop
+    await logSystemAction(null, 'test_session_stopped', {
+      session_id: sessionId,
+      status: session.status
+    });
+
     res.json(session);
   } catch (error) {
     console.error('Error stopping test session:', error);
+
+    // Log the error
+    await logSystemAction(null, 'test_session_stop_failed', {
+      session_id: req.params.sessionId,
+      error: error.message
+    });
+
     res.status(500).json({ error: 'Failed to stop test session' });
   }
 });
@@ -1238,6 +1299,13 @@ app.post('/api/users/create', async (req, res) => {
     res.json(user);
   } catch (error) {
     console.error('Error creating user:', error);
+
+    // Log the error
+    await logSystemAction(null, 'test_user_creation_failed', {
+      username: req.body.username,
+      error: error.message
+    });
+
     res.status(500).json({ error: 'Failed to create user' });
   }
 });

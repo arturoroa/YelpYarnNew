@@ -58,23 +58,32 @@ export default function SystemLogs() {
   };
 
   const getActionColor = (action: string, details: any = {}) => {
-    if (action.includes('deleted') || action.includes('error')) {
+    if (action.includes('deleted') || action.includes('error') || action.includes('failed') || action.includes('blocked')) {
       return 'bg-red-100 text-red-800 border-red-200';
     }
-    if (action.includes('test')) {
+    if (action.includes('test') || action.includes('session')) {
       const testResult = details?.test_result;
       if (testResult === 'success') {
         return 'bg-green-100 text-green-800 border-green-200';
       } else if (testResult === 'failure' || testResult === 'error') {
         return 'bg-red-100 text-red-800 border-red-200';
       }
-      return 'bg-purple-100 text-purple-800 border-purple-200';
+      if (action.includes('started') || action.includes('running')) {
+        return 'bg-blue-100 text-blue-800 border-blue-200';
+      }
+      if (action.includes('stopped') || action.includes('completed')) {
+        return 'bg-gray-100 text-gray-800 border-gray-200';
+      }
+      return 'bg-blue-100 text-blue-800 border-blue-200';
     }
     if (action.includes('updated') || action.includes('migrated')) {
       return 'bg-yellow-100 text-yellow-800 border-yellow-200';
     }
     if (action.includes('created')) {
       return 'bg-green-100 text-green-800 border-green-200';
+    }
+    if (action.includes('environment')) {
+      return 'bg-teal-100 text-teal-800 border-teal-200';
     }
     return 'bg-blue-100 text-blue-800 border-blue-200';
   };
@@ -267,6 +276,21 @@ export default function SystemLogs() {
                               Type: <span className="font-medium">{log.details.integration_type}</span>
                             </p>
                           )}
+                          {log.details.environment_name && (
+                            <p className="text-xs text-gray-600">
+                              Environment: <span className="font-medium">{log.details.environment_name}</span>
+                            </p>
+                          )}
+                          {log.details.used_in_environments && (
+                            <p className="text-xs text-gray-600">
+                              Used in: <span className="font-medium">{log.details.used_in_environments}</span>
+                            </p>
+                          )}
+                          {log.details.reason && (
+                            <p className="text-xs text-gray-600">
+                              Reason: <span className="font-medium">{log.details.reason}</span>
+                            </p>
+                          )}
                           {log.details.test_result && (
                             <p className="text-xs text-gray-600">
                               Test Result: <span className={`font-medium ${
@@ -279,6 +303,11 @@ export default function SystemLogs() {
                           {log.details.test_message && (
                             <p className="text-xs text-gray-600 mt-1">
                               Message: <span className="font-medium">{log.details.test_message}</span>
+                            </p>
+                          )}
+                          {log.details.error && (
+                            <p className="text-xs text-red-600 mt-1">
+                              Error: <span className="font-medium">{log.details.error}</span>
                             </p>
                           )}
                           <div className="mt-2">
