@@ -650,47 +650,67 @@ app.delete('/api/integrations/:id', async (req, res) => {
       // since the app will switch back to using it after integration deletion
       console.log('Truncating ALL tables in defaultRecorder.db (appDb)...');
       try {
-        if (appDb.db) {
-          // Clear ALL data from all tables
+        if (appDb && appDb.db) {
+          // Step 1: DELETE ALL data from ALL tables (complete truncate)
+          console.log('Step 1: Deleting all data from all tables...');
+
           appDb.db.prepare('DELETE FROM test_sessions').run();
-          console.log('✓ Truncated test_sessions');
+          console.log('  ✓ Truncated test_sessions');
 
           appDb.db.prepare('DELETE FROM system_logs').run();
-          console.log('✓ Truncated system_logs');
+          console.log('  ✓ Truncated system_logs');
 
           appDb.db.prepare('DELETE FROM user_sessions').run();
-          console.log('✓ Truncated user_sessions');
+          console.log('  ✓ Truncated user_sessions');
 
           appDb.db.prepare('DELETE FROM integrations').run();
-          console.log('✓ Truncated integrations');
+          console.log('  ✓ Truncated integrations');
 
           appDb.db.prepare('DELETE FROM environments').run();
-          console.log('✓ Truncated environments');
+          console.log('  ✓ Truncated environments');
 
           appDb.db.prepare('DELETE FROM yelp_users').run();
-          console.log('✓ Truncated yelp_users');
+          console.log('  ✓ Truncated yelp_users');
 
           appDb.db.prepare('DELETE FROM system_users').run();
-          console.log('✓ Truncated system_users');
+          console.log('  ✓ Truncated system_users');
 
-          // Restore user aroa in yelp_users
-          appDb.db.prepare(`
-            INSERT INTO yelp_users (username, email, config, is_active)
-            VALUES ('aroa', 'aroa@example.com', '{}', 1)
-          `).run();
-          console.log('✓ Restored yelp user: aroa');
+          // Step 2: Verify tables are empty
+          const yelpCount = appDb.db.prepare('SELECT COUNT(*) as count FROM yelp_users').get();
+          const systemCount = appDb.db.prepare('SELECT COUNT(*) as count FROM system_users').get();
+          console.log(`Step 2: Verification - yelp_users: ${yelpCount.count}, system_users: ${systemCount.count}`);
 
-          // Restore system admin aroa in system_users
+          // Step 3: Restore ONLY user aroa
+          console.log('Step 3: Restoring ONLY user aroa...');
+
+          // Restore user aroa in yelp_users with a fixed ID to ensure uniqueness
           appDb.db.prepare(`
-            INSERT INTO system_users (username, password, type, email)
-            VALUES ('aroa', 'aroa', 'systemadmin', 'aroa@example.com')
+            INSERT INTO yelp_users (id, username, email, config, is_active, created_at, updated_at)
+            VALUES (1, 'aroa', 'aroa@example.com', '{}', 1, datetime('now'), datetime('now'))
           `).run();
-          console.log('✓ Restored system admin: aroa');
+          console.log('  ✓ Restored yelp user: aroa (id=1)');
+
+          // Restore system admin aroa in system_users with a fixed ID
+          appDb.db.prepare(`
+            INSERT INTO system_users (id, username, password, type, email, created_at, updated_at)
+            VALUES (1, 'aroa', 'aroa', 'systemadmin', 'aroa@example.com', datetime('now'), datetime('now'))
+          `).run();
+          console.log('  ✓ Restored system admin: aroa (id=1)');
+
+          // Step 4: Final verification
+          const finalYelpCount = appDb.db.prepare('SELECT COUNT(*) as count FROM yelp_users').get();
+          const finalSystemCount = appDb.db.prepare('SELECT COUNT(*) as count FROM system_users').get();
+          const yelpUsers = appDb.db.prepare('SELECT username FROM yelp_users').all();
+          const systemUsers = appDb.db.prepare('SELECT username FROM system_users').all();
+
+          console.log(`Step 4: Final state - yelp_users: ${finalYelpCount.count} (${yelpUsers.map(u => u.username).join(', ')})`);
+          console.log(`            system_users: ${finalSystemCount.count} (${systemUsers.map(u => u.username).join(', ')})`);
         }
 
-        console.log('All tables truncated and user aroa restored in defaultRecorder.db');
+        console.log('✓ All tables truncated and ONLY user aroa restored in defaultRecorder.db');
       } catch (appDbClearError) {
         console.error('Error clearing data from appDb:', appDbClearError);
+        console.error('Error details:', appDbClearError.message);
       }
 
       // Integration was already deleted as part of clearing all integrations from appDb
