@@ -9,6 +9,7 @@ import { dirname, join } from 'path';
 import { createRequire } from 'module';
 import { AppDatabase } from './database/AppDatabase.js';
 import SchemaManager from './database/SchemaManager.js';
+import { SupabaseManager } from './database/SupabaseClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -40,19 +41,25 @@ try {
   appDb = new AppDatabase();
 }
 
+// Initialize Supabase manager for user sessions, system logs, and environments
+const supabaseManager = new SupabaseManager();
+console.log('✓ Supabase manager initialized');
+
 // Using local SQLite database only
 console.log('✓ Database ready for use');
 
-// Helper function to log actions to local DB
+// Helper function to log actions to Supabase
 async function logSystemAction(userId, action, details = {}) {
   try {
-    if (appDb && typeof appDb.logSystemAction === 'function') {
-      appDb.logSystemAction(userId, action, details);
-    } else {
-      console.log('Cannot log: appDb or logSystemAction not available');
-    }
+    await supabaseManager.createSystemLog({
+      userId,
+      action,
+      details,
+      timestamp: new Date().toISOString()
+    });
+    console.log(`✓ System log written to Supabase: ${action}`);
   } catch (error) {
-    console.error('Failed to log to local database:', error);
+    console.error('Failed to log to Supabase:', error);
   }
 }
 
@@ -645,20 +652,18 @@ app.delete('/api/integrations/:id', async (req, res) => {
         });
       }
 
-      // IMPORTANT: Also clear data from defaultRecorder.db (appDb)
-      // since the app will switch back to using it after integration deletion
-      console.log('Clearing ALL data from defaultRecorder.db (appDb)...');
+      // IMPORTANT: Clear data from Supabase and defaultRecorder.db
+      console.log('Clearing ALL data from Supabase and local database...');
       try {
-        // Clear test sessions
+        // Clear data from Supabase
+        await supabaseManager.deleteAllData();
+        console.log('✓ All data cleared from Supabase (kept user aroa)');
+
+        // Clear data from local defaultRecorder.db (appDb)
         if (appDb.db) {
           const clearSessionsStmt = appDb.db.prepare('DELETE FROM test_sessions');
           clearSessionsStmt.run();
           console.log('Cleared test_sessions from appDb');
-
-          // Clear system logs completely
-          const clearLogsStmt = appDb.db.prepare('DELETE FROM system_logs');
-          clearLogsStmt.run();
-          console.log('Cleared system_logs from appDb');
 
           // Clear yelp_users except 'aroa'
           const clearUsersStmt = appDb.db.prepare("DELETE FROM yelp_users WHERE username != 'aroa'");
@@ -669,16 +674,11 @@ app.delete('/api/integrations/:id', async (req, res) => {
           const clearIntegrationsStmt = appDb.db.prepare('DELETE FROM integrations');
           clearIntegrationsStmt.run();
           console.log('Cleared integrations from appDb');
-
-          // Clear ALL environments
-          const clearEnvironmentsStmt = appDb.db.prepare('DELETE FROM environments');
-          clearEnvironmentsStmt.run();
-          console.log('Cleared environments from appDb');
         }
 
-        console.log('All data cleared from defaultRecorder.db (kept only user aroa)');
-      } catch (appDbClearError) {
-        console.error('Error clearing data from appDb:', appDbClearError);
+        console.log('All data cleared (kept only user aroa)');
+      } catch (clearError) {
+        console.error('Error clearing data:', clearError);
       }
 
       // Integration was already deleted as part of clearing all integrations from appDb
@@ -1712,21 +1712,51 @@ app.post('/api/system-logs', async (req, res) => {
   }
 });
 
-// Get system logs from local database ONLY
-// System logs are ALWAYS stored in the local DefaultRecorderDB, never in integration databases
+// Get system logs from Supabase
 app.get('/api/system-logs', async (req, res) => {
   try {
-    // Always use local SQLite database for system logs
-    if (!appDb || !appDb.getSystemLogs) {
-      console.log('WARNING: No appDb or getSystemLogs method available');
-      return res.json([]);
-    }
-
-    const logs = appDb.getSystemLogs(100);
-    console.log(`Returning ${logs.length} system logs from local database`);
+    const logs = await supabaseManager.getSystemLogs(100);
+    console.log(`Returning ${logs.length} system logs from Supabase`);
     res.json(logs);
   } catch (error) {
     console.error('Error fetching system logs:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+// User Sessions Endpoints (using Supabase)
+app.post('/api/user-sessions', async (req, res) => {
+  try {
+    const sessionData = req.body;
+    const session = await supabaseManager.createUserSession(sessionData);
+    console.log(`Created user session in Supabase: ${session.id} for user ${session.username}`);
+    res.json(session);
+  } catch (error) {
+    console.error('Error creating user session:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.get('/api/user-sessions', async (req, res) => {
+  try {
+    const sessions = await supabaseManager.getAllUserSessions();
+    console.log(`Returning ${sessions.length} user sessions from Supabase`);
+    res.json(sessions);
+  } catch (error) {
+    console.error('Error fetching user sessions:', error);
+    res.status(500).json({ error: error.message });
+  }
+});
+
+app.patch('/api/user-sessions/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const updates = req.body;
+    const session = await supabaseManager.updateUserSession(id, updates);
+    console.log(`Updated user session in Supabase: ${id}`);
+    res.json(session);
+  } catch (error) {
+    console.error('Error updating user session:', error);
     res.status(500).json({ error: error.message });
   }
 });
