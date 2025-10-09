@@ -441,9 +441,17 @@ export class DefaultRecorderDB {
   createSystemUser(username, password, type = 'user', email = null) {
     const id = randomUUID();
 
-    this.db.exec(`
-      ALTER TABLE system_users ADD COLUMN IF NOT EXISTS email TEXT;
-    `);
+    // Check if email column exists, if not add it
+    try {
+      const columns = this.db.prepare("PRAGMA table_info(system_users)").all();
+      const hasEmailColumn = columns.some(col => col.name === 'email');
+
+      if (!hasEmailColumn) {
+        this.db.exec(`ALTER TABLE system_users ADD COLUMN email TEXT;`);
+      }
+    } catch (error) {
+      console.error('Error checking/adding email column:', error);
+    }
 
     const stmt = this.db.prepare(`
       INSERT INTO system_users (id, username, password, type, email)
