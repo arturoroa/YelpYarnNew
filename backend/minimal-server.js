@@ -224,6 +224,20 @@ app.get('/api/system-users', async (req, res) => {
     res.json(users);
   } catch (error) {
     console.error('Error fetching system users:', error);
+    res.status(500).json({ error: 'Failed to fetch system users' });
+  }
+});
+
+app.get('/api/debug/system-users', async (req, res) => {
+  try {
+    if (!appDb || !appDb.db) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const users = appDb.db.prepare('SELECT id, username, password, type, email FROM system_users').all();
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching system users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
   }
 });
