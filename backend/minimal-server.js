@@ -9,7 +9,6 @@ import { dirname, join } from 'path';
 import { createRequire } from 'module';
 import { AppDatabase } from './database/AppDatabase.js';
 import SchemaManager from './database/SchemaManager.js';
-import { SupabaseManager } from './database/SupabaseClient.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -41,28 +40,19 @@ try {
   appDb = new AppDatabase();
 }
 
-// Initialize Supabase manager for user sessions, system logs, and environments
-const supabaseManager = new SupabaseManager();
-console.log('✓ Supabase manager initialized');
-
-// Ensure default user 'aroa' exists in Supabase
-await supabaseManager.ensureDefaultUser();
-
 // Using local SQLite database only
 console.log('✓ Database ready for use');
 
-// Helper function to log actions to Supabase
+// Helper function to log actions to local DB
 async function logSystemAction(userId, action, details = {}) {
   try {
-    await supabaseManager.createSystemLog({
-      userId,
-      action,
-      details,
-      timestamp: new Date().toISOString()
-    });
-    console.log(`✓ System log written to Supabase: ${action}`);
+    if (appDb && typeof appDb.logSystemAction === 'function') {
+      appDb.logSystemAction(userId, action, details);
+    } else {
+      console.log('Cannot log: appDb or logSystemAction not available');
+    }
   } catch (error) {
-    console.error('Failed to log to Supabase:', error);
+    console.error('Failed to log to local database:', error);
   }
 }
 
@@ -179,7 +169,11 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = await supabaseManager.verifySystemUser(username, password);
+    if (!appDb || !appDb.verifySystemUser) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const user = appDb.verifySystemUser(username, password);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid username or password' });
@@ -222,7 +216,11 @@ app.post('/api/auth/logout', async (req, res) => {
 
 app.get('/api/system-users', async (req, res) => {
   try {
-    const users = await supabaseManager.getAllSystemUsers();
+    if (!appDb || !appDb.getAllSystemUsers) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const users = appDb.getAllSystemUsers();
     res.json(users);
   } catch (error) {
     console.error('Error fetching system users:', error);
@@ -238,7 +236,11 @@ app.post('/api/system-users', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    const user = await supabaseManager.createSystemUser(username, password, type || 'user', email);
+    if (!appDb || !appDb.createSystemUser) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const user = appDb.createSystemUser(username, password, type || 'user', email);
 
     await logSystemAction(null, 'system_user_created', {
       user_id: user.id,
@@ -258,7 +260,11 @@ app.put('/api/system-users/:id', async (req, res) => {
     const { id } = req.params;
     const { username, password, email, type } = req.body;
 
-    const user = await supabaseManager.updateSystemUser(id, { username, password, email, type });
+    if (!appDb || !appDb.updateSystemUser) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const user = appDb.updateSystemUser(id, { username, password, email, type });
 
     await logSystemAction(null, 'system_user_updated', {
       user_id: id,
@@ -277,12 +283,16 @@ app.delete('/api/system-users/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    const user = await supabaseManager.getSystemUser(id);
+    if (!appDb || !appDb.deleteSystemUser) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const user = appDb.getSystemUser(id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    await supabaseManager.deleteSystemUser(id);
+    appDb.deleteSystemUser(id);
 
     await logSystemAction(null, 'system_user_deleted', {
       user_id: id,
@@ -297,8 +307,12 @@ app.delete('/api/system-users/:id', async (req, res) => {
 });
 
 // Get primary database integration (first connected database from local SQLite)
-async function getPrimaryIntegration() {
-  const integrations = await supabaseManager.getAllIntegrations();
+function getPrimaryIntegration() {
+  if (!appDb || !appDb.getAllIntegrations) {
+    return null;
+  }
+
+  const integrations = appDb.getAllIntegrations();
   const connectedDb = integrations.find(i => i.type === 'database' && i.status === 'connected');
   return connectedDb || null;
 }
@@ -307,7 +321,10 @@ async function getPrimaryIntegration() {
 // Integration metadata is ALWAYS stored in DefaultRecorderDB (local SQLite)
 app.get('/api/integrations', async (req, res) => {
   try {
-    const integrations = await supabaseManager.getAllIntegrations();
+    if (!appDb || !appDb.getAllIntegrations) {
+      return res.json([]);
+    }
+    const integrations = appDb.getAllIntegrations();
     res.json(integrations);
   } catch (error) {
     console.error('Error fetching integrations:', error);
@@ -323,7 +340,11 @@ app.post('/api/integrations', async (req, res) => {
       return res.status(400).json({ error: 'Name and type are required' });
     }
 
-    const newIntegration = await supabaseManager.createIntegration({ name, type, status: 'disconnected', config: config || {} });
+    if (!appDb || !appDb.createIntegration) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const newIntegration = appDb.createIntegration({ name, type, status: 'disconnected', config: config || {} });
 
     // Log the action
     await logSystemAction(null, 'integration_created', {
@@ -360,7 +381,11 @@ app.put('/api/integrations/:id', async (req, res) => {
     if (status !== undefined) updateData.status = status;
     if (last_sync !== undefined) updateData.last_sync = last_sync;
 
-    const integration = await supabaseManager.updateIntegration(id, updateData);
+    if (!appDb || !appDb.updateIntegration) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const integration = appDb.updateIntegration(id, updateData);
 
     // Log the action
     await logSystemAction(null, 'integration_updated', {
@@ -384,7 +409,7 @@ app.put('/api/integrations/:id', async (req, res) => {
           // Migrate data from local SQLite to the new database
           const { DataMigrator } = await import('./database/DataMigrator.js');
           const migrator = new DataMigrator(appDb);
-          const exportedData = await supabaseManager.exportAllData();
+          const exportedData = appDb.exportData();
 
           console.log(`Migrating data to ${integration.name}...`, exportedData);
 
@@ -445,13 +470,17 @@ app.delete('/api/integrations/:id', async (req, res) => {
     console.log('Deleting integration with id:', id);
     console.log('Should migrate data:', shouldMigrate);
 
-    const integration = await supabaseManager.getIntegration(id);
+    if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const integration = appDb.getIntegration(id);
     if (!integration) {
       return res.status(404).json({ error: 'Integration not found' });
     }
 
     // CRITICAL: Check database for environments using this integration
-    const allEnvironments = await supabaseManager.getAllEnvironments();
+    const allEnvironments = appDb.getEnvironments ? appDb.getEnvironments() : [];
 
     console.log('Checking', allEnvironments.length, 'environments from database for integration usage');
 
@@ -617,26 +646,52 @@ app.delete('/api/integrations/:id', async (req, res) => {
         });
       }
 
-      // IMPORTANT: Clear data from Supabase and defaultRecorder.db
-      console.log('Clearing ALL data from Supabase and local database...');
+      // IMPORTANT: Also clear data from defaultRecorder.db (appDb)
+      // since the app will switch back to using it after integration deletion
+      console.log('Clearing ALL data from defaultRecorder.db (appDb)...');
       try {
-        // Clear data from Supabase
-        await supabaseManager.deleteAllData();
-        console.log('✓ All data cleared from Supabase (kept user aroa)');
+        // Clear test sessions
+        if (appDb.db) {
+          const clearSessionsStmt = appDb.db.prepare('DELETE FROM test_sessions');
+          clearSessionsStmt.run();
+          console.log('Cleared test_sessions from appDb');
 
-        // Clear data from local defaultRecorder.db (appDb)
-        // Data is already cleared from Supabase above
+          // Clear system logs completely
+          const clearLogsStmt = appDb.db.prepare('DELETE FROM system_logs');
+          clearLogsStmt.run();
+          console.log('Cleared system_logs from appDb');
 
-        console.log('All data cleared (kept only user aroa)');
-      } catch (clearError) {
-        console.error('Error clearing data:', clearError);
+          // Clear yelp_users except 'aroa'
+          const clearUsersStmt = appDb.db.prepare("DELETE FROM yelp_users WHERE username != 'aroa'");
+          clearUsersStmt.run();
+          console.log('Cleared yelp_users from appDb (kept user aroa)');
+
+          // Clear ALL integrations (including the one being deleted)
+          const clearIntegrationsStmt = appDb.db.prepare('DELETE FROM integrations');
+          clearIntegrationsStmt.run();
+          console.log('Cleared integrations from appDb');
+
+          // Clear ALL environments
+          const clearEnvironmentsStmt = appDb.db.prepare('DELETE FROM environments');
+          clearEnvironmentsStmt.run();
+          console.log('Cleared environments from appDb');
+
+          // Clear ALL user sessions
+          const clearUserSessionsStmt = appDb.db.prepare('DELETE FROM user_sessions');
+          clearUserSessionsStmt.run();
+          console.log('Cleared user_sessions from appDb');
+        }
+
+        console.log('All data cleared from defaultRecorder.db (kept only user aroa)');
+      } catch (appDbClearError) {
+        console.error('Error clearing data from appDb:', appDbClearError);
       }
 
       // Integration was already deleted as part of clearing all integrations from appDb
       // No need to call deleteIntegration(id) again
     } else {
       // For migrations or non-database integrations, delete the integration normally
-      const deleted = await supabaseManager.deleteIntegration(id);
+      const deleted = appDb.deleteIntegration(id);
       if (!deleted) {
         return res.status(500).json({ error: 'Failed to delete integration' });
       }
@@ -673,7 +728,10 @@ app.delete('/api/integrations/:id', async (req, res) => {
 app.post('/api/integrations/:id/setup-schema', async (req, res) => {
   try {
     const { id } = req.params;
-    const integrations = await supabaseManager.getAllIntegrations();
+    if (!appDb || !appDb.getAllIntegrations) {
+      return res.json([]);
+    }
+    const integrations = appDb.getAllIntegrations();
     const integration = integrations.find(i => i.id === id);
 
     if (!integration) {
@@ -705,7 +763,10 @@ app.post('/api/integrations/:id/setup-schema', async (req, res) => {
 app.post('/api/integrations/:id/migrate-to-default', async (req, res) => {
   try {
     const { id } = req.params;
-    const integrations = await supabaseManager.getAllIntegrations();
+    if (!appDb || !appDb.getAllIntegrations) {
+      return res.json([]);
+    }
+    const integrations = appDb.getAllIntegrations();
     const integration = integrations.find(i => i.id === id);
 
     if (!integration) {
@@ -1396,7 +1457,7 @@ app.get('/api/logs/system/recent', async (req, res) => {
 // Environment endpoints
 app.get('/api/environments', async (req, res) => {
   try {
-    const environments = await supabaseManager.getAllEnvironments();
+    const environments = appDb.getEnvironments ? appDb.getEnvironments() : [];
     res.json(environments || []);
   } catch (error) {
     console.error('Error fetching environments:', error);
@@ -1406,7 +1467,7 @@ app.get('/api/environments', async (req, res) => {
 
 app.post('/api/environments', async (req, res) => {
   try {
-    const environment = await supabaseManager.createEnvironment(req.body);
+    const environment = appDb.createEnvironment ? appDb.createEnvironment(req.body) : null;
     if (!environment) {
       return res.status(500).json({ error: 'Failed to create environment' });
     }
@@ -1424,7 +1485,7 @@ app.post('/api/environments', async (req, res) => {
 app.put('/api/environments/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const environment = await supabaseManager.updateEnvironment(id, req.body);
+    const environment = appDb.updateEnvironment ? appDb.updateEnvironment(id, req.body) : null;
     if (!environment) {
       return res.status(404).json({ error: 'Environment not found' });
     }
@@ -1442,7 +1503,7 @@ app.put('/api/environments/:id', async (req, res) => {
 app.delete('/api/environments/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = await supabaseManager.deleteEnvironment(id);
+    const deleted = appDb.deleteEnvironment ? appDb.deleteEnvironment(id) : false;
     if (!deleted) {
       return res.status(404).json({ error: 'Environment not found' });
     }
@@ -1459,7 +1520,7 @@ app.delete('/api/environments/:id', async (req, res) => {
 // Test session endpoints
 app.get('/api/tests/sessions', async (req, res) => {
   try {
-    const sessions = await supabaseManager.getAllTestSessions();
+    const sessions = appDb.getTestSessions ? appDb.getTestSessions() : [];
     res.json(sessions || []);
   } catch (error) {
     console.error('Error fetching test sessions:', error);
@@ -1470,7 +1531,7 @@ app.get('/api/tests/sessions', async (req, res) => {
 app.post('/api/tests/start', async (req, res) => {
   try {
     const sessionData = req.body;
-    const session = await supabaseManager.createTestSession(sessionData);
+    const session = appDb.createTestSession(sessionData);
 
     // Log test session start
     await logSystemAction(null, 'test_session_started', {
@@ -1496,7 +1557,7 @@ app.post('/api/tests/start', async (req, res) => {
 app.get('/api/tests/session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const session = await supabaseManager.getTestSession(sessionId);
+    const session = appDb.getTestSession(sessionId);
     if (!session) {
       return res.status(404).json({ error: 'Test session not found' });
     }
@@ -1510,7 +1571,7 @@ app.get('/api/tests/session/:sessionId', async (req, res) => {
 app.post('/api/tests/stop/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const session = await supabaseManager.updateTestSession(sessionId, {
+    const session = appDb.updateTestSession(sessionId, {
       status: 'stopped',
       completed_at: new Date().toISOString()
     });
@@ -1539,7 +1600,7 @@ app.post('/api/tests/stop/:sessionId', async (req, res) => {
 app.get('/api/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = await supabaseManager.getYelpUser(userId);
+    const user = appDb.getYelpUser(userId);
     res.json(user || null);
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -1550,7 +1611,7 @@ app.get('/api/users/:userId', async (req, res) => {
 app.get('/api/users/check/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const { data: user } = await supabaseManager.client.from('yelp_users').select('*').eq('username', username).maybeSingle();
+    const user = appDb.getYelpUserByUsername(username);
     res.json({ exists: !!user, user: user || null });
   } catch (error) {
     console.error('Error checking user:', error);
@@ -1561,7 +1622,7 @@ app.get('/api/users/check/:username', async (req, res) => {
 app.post('/api/users/create', async (req, res) => {
   try {
     const userData = req.body;
-    const user = await supabaseManager.createYelpUser(userData);
+    const user = appDb.createYelpUser(userData);
 
     await logSystemAction(null, 'test_user_created', {
       user_id: user.id,
@@ -1587,7 +1648,7 @@ app.post('/api/users/create', async (req, res) => {
 app.post('/api/integrations/:id/migrate', async (req, res) => {
   try {
     const { id } = req.params;
-    const integration = await supabaseManager.getIntegration(id);
+    const integration = appDb.getIntegration ? appDb.getIntegration(id) : null;
 
     if (!integration) {
       return res.status(404).json({ error: 'Integration not found' });
@@ -1663,11 +1724,18 @@ app.post('/api/system-logs', async (req, res) => {
   }
 });
 
-// Get system logs from Supabase
+// Get system logs from local database ONLY
+// System logs are ALWAYS stored in the local DefaultRecorderDB, never in integration databases
 app.get('/api/system-logs', async (req, res) => {
   try {
-    const logs = await supabaseManager.getSystemLogs(100);
-    console.log(`Returning ${logs.length} system logs from Supabase`);
+    // Always use local SQLite database for system logs
+    if (!appDb || !appDb.getSystemLogs) {
+      console.log('WARNING: No appDb or getSystemLogs method available');
+      return res.json([]);
+    }
+
+    const logs = appDb.getSystemLogs(100);
+    console.log(`Returning ${logs.length} system logs from local database`);
     res.json(logs);
   } catch (error) {
     console.error('Error fetching system logs:', error);
@@ -1675,12 +1743,12 @@ app.get('/api/system-logs', async (req, res) => {
   }
 });
 
-// User Sessions Endpoints (using Supabase)
+// User Sessions Endpoints
 app.post('/api/user-sessions', async (req, res) => {
   try {
     const sessionData = req.body;
-    const session = await supabaseManager.createUserSession(sessionData);
-    console.log(`Created user session in Supabase: ${session.id} for user ${session.username}`);
+    const session = appDb.createUserSession(sessionData);
+    console.log(`Created user session: ${session.id} for user ${session.username}`);
     res.json(session);
   } catch (error) {
     console.error('Error creating user session:', error);
@@ -1690,8 +1758,8 @@ app.post('/api/user-sessions', async (req, res) => {
 
 app.get('/api/user-sessions', async (req, res) => {
   try {
-    const sessions = await supabaseManager.getAllUserSessions();
-    console.log(`Returning ${sessions.length} user sessions from Supabase`);
+    const sessions = appDb.getAllUserSessions();
+    console.log(`Returning ${sessions.length} user sessions`);
     res.json(sessions);
   } catch (error) {
     console.error('Error fetching user sessions:', error);
@@ -1703,8 +1771,8 @@ app.patch('/api/user-sessions/:id', async (req, res) => {
   try {
     const { id } = req.params;
     const updates = req.body;
-    const session = await supabaseManager.updateUserSession(id, updates);
-    console.log(`Updated user session in Supabase: ${id}`);
+    const session = appDb.updateUserSession(id, updates);
+    console.log(`Updated user session: ${id}`);
     res.json(session);
   } catch (error) {
     console.error('Error updating user session:', error);
