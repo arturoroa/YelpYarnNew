@@ -71,25 +71,30 @@ export class DataMigrator {
         ]);
       }
 
-      // Migrate yelp users
-      for (const user of data.yelp_users) {
+      // Migrate users - handle both old (yelp_users) and new (users) schemas
+      const usersToMigrate = data.yelp_users || data.users || [];
+
+      for (const user of usersToMigrate) {
+        const userType = user.type_of_user || 'TestUser';
+        const creationTime = user.creation_time || user.created_at;
+        const password = user.password || 'migrated';
+        const createdBy = user.created_by || 'migration';
+
         await client.query(`
-          INSERT INTO yelp_users (id, username, email, config, is_active, created_at, updated_at)
+          INSERT INTO users (id, username, password, email, created_by, creation_time, type_of_user)
           VALUES ($1, $2, $3, $4, $5, $6, $7)
           ON CONFLICT (id) DO UPDATE SET
             username = EXCLUDED.username,
             email = EXCLUDED.email,
-            config = EXCLUDED.config,
-            is_active = EXCLUDED.is_active,
-            updated_at = EXCLUDED.updated_at
+            type_of_user = EXCLUDED.type_of_user
         `, [
           user.id,
           user.username,
+          password,
           user.email,
-          JSON.stringify(user.config),
-          user.is_active,
-          user.created_at,
-          user.updated_at
+          createdBy,
+          creationTime,
+          userType
         ]);
       }
 
@@ -117,7 +122,7 @@ export class DataMigrator {
         migrated: {
           integrations: data.integrations.length,
           test_sessions: data.test_sessions.length,
-          yelp_users: data.yelp_users.length,
+          users: usersToMigrate.length,
           system_logs: data.system_logs.length
         }
       };
@@ -184,25 +189,30 @@ export class DataMigrator {
         ]);
       }
 
-      // Migrate yelp users
-      for (const user of data.yelp_users) {
+      // Migrate users - handle both old (yelp_users) and new (users) schemas
+      const usersToMigrate = data.yelp_users || data.users || [];
+
+      for (const user of usersToMigrate) {
+        const userType = user.type_of_user || 'TestUser';
+        const creationTime = user.creation_time || user.created_at;
+        const password = user.password || 'migrated';
+        const createdBy = user.created_by || 'migration';
+
         await connection.query(`
-          INSERT INTO yelp_users (id, username, email, config, is_active, created_at, updated_at)
+          INSERT INTO users (id, username, password, email, created_by, creation_time, type_of_user)
           VALUES (?, ?, ?, ?, ?, ?, ?)
           ON DUPLICATE KEY UPDATE
             username = VALUES(username),
             email = VALUES(email),
-            config = VALUES(config),
-            is_active = VALUES(is_active),
-            updated_at = VALUES(updated_at)
+            type_of_user = VALUES(type_of_user)
         `, [
           user.id,
           user.username,
+          password,
           user.email,
-          JSON.stringify(user.config),
-          user.is_active ? 1 : 0,
-          user.created_at,
-          user.updated_at
+          createdBy,
+          creationTime,
+          userType
         ]);
       }
 
@@ -228,7 +238,7 @@ export class DataMigrator {
         migrated: {
           integrations: data.integrations.length,
           test_sessions: data.test_sessions.length,
-          yelp_users: data.yelp_users.length,
+          users: usersToMigrate.length,
           system_logs: data.system_logs.length
         }
       };
@@ -282,22 +292,31 @@ export class DataMigrator {
         );
       }
 
-      // Migrate yelp users
-      const userStmt = targetDb.db.prepare(`
-        INSERT OR REPLACE INTO yelp_users (id, username, email, config, is_active, created_at, updated_at)
-        VALUES (?, ?, ?, ?, ?, ?, ?)
-      `);
+      // Migrate users - handle both old (yelp_users) and new (users) schemas
+      const usersToMigrate = data.yelp_users || data.users || [];
 
-      for (const user of data.yelp_users) {
-        userStmt.run(
-          user.id,
-          user.username,
-          user.email,
-          JSON.stringify(user.config),
-          user.is_active ? 1 : 0,
-          user.created_at,
-          user.updated_at
-        );
+      if (usersToMigrate.length > 0) {
+        const userStmt = targetDb.db.prepare(`
+          INSERT OR REPLACE INTO users (id, username, password, email, created_by, creation_time, type_of_user)
+          VALUES (?, ?, ?, ?, ?, ?, ?)
+        `);
+
+        for (const user of usersToMigrate) {
+          const userType = user.type_of_user || 'TestUser';
+          const creationTime = user.creation_time || user.created_at;
+          const password = user.password || 'migrated';
+          const createdBy = user.created_by || 'migration';
+
+          userStmt.run(
+            user.id,
+            user.username,
+            password,
+            user.email,
+            createdBy,
+            creationTime,
+            userType
+          );
+        }
       }
 
       // Migrate system logs
@@ -322,7 +341,7 @@ export class DataMigrator {
         migrated: {
           integrations: data.integrations.length,
           test_sessions: data.test_sessions.length,
-          yelp_users: data.yelp_users.length,
+          users: usersToMigrate.length,
           system_logs: data.system_logs.length
         }
       };
