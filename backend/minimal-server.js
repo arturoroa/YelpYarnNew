@@ -693,9 +693,9 @@ app.delete('/api/integrations/:id', async (req, res) => {
           // Restore system admin aroa in system_users with a fixed ID
           appDb.db.prepare(`
             INSERT INTO system_users (id, username, password, type, email, created_at, updated_at)
-            VALUES (1, 'aroa', 'aroa', 'systemadmin', 'aroa@example.com', datetime('now'), datetime('now'))
+            VALUES (1, 'aroa', '123456789', 'systemadmin', 'aroa@example.com', datetime('now'), datetime('now'))
           `).run();
-          console.log('  ✓ Restored system admin: aroa (id=1)');
+          console.log('  ✓ Restored system admin: aroa (id=1, password=123456789)');
 
           // Step 4: Final verification
           const finalYelpCount = appDb.db.prepare('SELECT COUNT(*) as count FROM yelp_users').get();
