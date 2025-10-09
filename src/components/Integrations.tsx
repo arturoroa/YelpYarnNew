@@ -182,20 +182,30 @@ export default function Integrations() {
       const environmentsStr = localStorage.getItem('environments');
       const environments = environmentsStr ? JSON.parse(environmentsStr) : [];
 
-      console.log('Attempting to delete integration:', id);
-      console.log('Checking against environments:', environments);
+      console.log('=== INTEGRATION DELETION CHECK ===');
+      console.log('Attempting to delete integration ID:', id);
+      console.log('Type of ID:', typeof id);
+      console.log('All environments from localStorage:', JSON.stringify(environments, null, 2));
 
       // Check if integration is used in any environment (client-side validation)
       const usedInEnvironments = environments.filter((env: any) => {
         const integrations = env.integrations || {};
         const integrationValues = Object.values(integrations);
-        const isUsed = integrationValues.includes(id);
+
+        // Check with strict equality
+        const isUsed = integrationValues.some(val => {
+          const match = val === id;
+          if (match) {
+            console.log(`MATCH FOUND: "${val}" === "${id}"`);
+          }
+          return match;
+        });
 
         console.log(`Environment "${env.name}":`, {
           integrations,
-          integrationValues,
+          integrationValues: integrationValues.map(v => `"${v}" (${typeof v})`),
           isUsed,
-          lookingFor: id
+          lookingFor: `"${id}" (${typeof id})`
         });
 
         return isUsed;

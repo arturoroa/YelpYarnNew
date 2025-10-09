@@ -76,7 +76,12 @@ export default function EnvironmentSelector({
   // Save environments to localStorage whenever they change
   useEffect(() => {
     if (environments.length >= 0) {
+      console.log('Saving environments to localStorage:', environments);
       localStorage.setItem('environments', JSON.stringify(environments));
+
+      // Verify it was saved correctly
+      const saved = localStorage.getItem('environments');
+      console.log('Verified saved environments:', saved ? JSON.parse(saved) : null);
     }
   }, [environments]);
 
@@ -181,6 +186,9 @@ export default function EnvironmentSelector({
       integrations: formData.integrations || {},
       isActive: Boolean(formData.isActive),
     };
+
+    console.log('Saving environment with integrations:', envToSave.integrations);
+    console.log('Full environment object:', envToSave);
 
     setEnvironments((prev) => {
       const next = editingEnvironment
@@ -497,9 +505,12 @@ export default function EnvironmentSelector({
                         const newIntegrations = { ...(formData.integrations || {}) };
                         if (e.target.value) {
                           newIntegrations.database = e.target.value;
+                          console.log('Selected database integration:', e.target.value);
                         } else {
                           delete newIntegrations.database;
+                          console.log('Removed database integration');
                         }
+                        console.log('New integrations object:', newIntegrations);
                         setFormData((prev) => ({
                           ...prev,
                           integrations: newIntegrations,

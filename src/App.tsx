@@ -70,8 +70,13 @@ const UserBar: React.FC = () => {
 const AppContent: React.FC = () => {
   const [activeView, setActiveView] = useState<ActiveView>('dashboard');
   const [selectedEnvironment, setSelectedEnvironment] = useState<any>(null);
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+
+  // Reset to dashboard when user changes (login/logout)
+  React.useEffect(() => {
+    setActiveView('dashboard');
+  }, [user?.username]);
 
   // Función para manejar la visualización de sesiones
   const handleViewSession = (sessionId: string) => {
