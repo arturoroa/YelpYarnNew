@@ -173,11 +173,16 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(500).json({ error: 'Database not initialized' });
     }
 
+    console.log(`Login attempt for username: ${username}`);
+
     const user = appDb.verifySystemUser(username, password);
 
     if (!user) {
+      console.log(`Login failed for username: ${username} - user not found in system_users table`);
       return res.status(401).json({ error: 'Invalid username or password' });
     }
+
+    console.log(`Login successful for username: ${username}, type: ${user.type}`);
 
     await logSystemAction(user.id, 'system_user_login', {
       username: user.username,
