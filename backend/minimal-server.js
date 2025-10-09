@@ -646,43 +646,49 @@ app.delete('/api/integrations/:id', async (req, res) => {
         });
       }
 
-      // IMPORTANT: Also clear data from defaultRecorder.db (appDb)
+      // IMPORTANT: Truncate ALL tables in defaultRecorder.db and restore only aroa user
       // since the app will switch back to using it after integration deletion
-      console.log('Clearing ALL data from defaultRecorder.db (appDb)...');
+      console.log('Truncating ALL tables in defaultRecorder.db (appDb)...');
       try {
-        // Clear test sessions
         if (appDb.db) {
-          const clearSessionsStmt = appDb.db.prepare('DELETE FROM test_sessions');
-          clearSessionsStmt.run();
-          console.log('Cleared test_sessions from appDb');
+          // Clear ALL data from all tables
+          appDb.db.prepare('DELETE FROM test_sessions').run();
+          console.log('✓ Truncated test_sessions');
 
-          // Clear system logs completely
-          const clearLogsStmt = appDb.db.prepare('DELETE FROM system_logs');
-          clearLogsStmt.run();
-          console.log('Cleared system_logs from appDb');
+          appDb.db.prepare('DELETE FROM system_logs').run();
+          console.log('✓ Truncated system_logs');
 
-          // Clear yelp_users except 'aroa'
-          const clearUsersStmt = appDb.db.prepare("DELETE FROM yelp_users WHERE username != 'aroa'");
-          clearUsersStmt.run();
-          console.log('Cleared yelp_users from appDb (kept user aroa)');
+          appDb.db.prepare('DELETE FROM user_sessions').run();
+          console.log('✓ Truncated user_sessions');
 
-          // Clear ALL integrations (including the one being deleted)
-          const clearIntegrationsStmt = appDb.db.prepare('DELETE FROM integrations');
-          clearIntegrationsStmt.run();
-          console.log('Cleared integrations from appDb');
+          appDb.db.prepare('DELETE FROM integrations').run();
+          console.log('✓ Truncated integrations');
 
-          // Clear ALL environments
-          const clearEnvironmentsStmt = appDb.db.prepare('DELETE FROM environments');
-          clearEnvironmentsStmt.run();
-          console.log('Cleared environments from appDb');
+          appDb.db.prepare('DELETE FROM environments').run();
+          console.log('✓ Truncated environments');
 
-          // Clear ALL user sessions
-          const clearUserSessionsStmt = appDb.db.prepare('DELETE FROM user_sessions');
-          clearUserSessionsStmt.run();
-          console.log('Cleared user_sessions from appDb');
+          appDb.db.prepare('DELETE FROM yelp_users').run();
+          console.log('✓ Truncated yelp_users');
+
+          appDb.db.prepare('DELETE FROM system_users').run();
+          console.log('✓ Truncated system_users');
+
+          // Restore user aroa in yelp_users
+          appDb.db.prepare(`
+            INSERT INTO yelp_users (username, email, config, is_active)
+            VALUES ('aroa', 'aroa@example.com', '{}', 1)
+          `).run();
+          console.log('✓ Restored yelp user: aroa');
+
+          // Restore system admin aroa in system_users
+          appDb.db.prepare(`
+            INSERT INTO system_users (username, password, type, email)
+            VALUES ('aroa', 'aroa', 'systemadmin', 'aroa@example.com')
+          `).run();
+          console.log('✓ Restored system admin: aroa');
         }
 
-        console.log('All data cleared from defaultRecorder.db (kept only user aroa)');
+        console.log('All tables truncated and user aroa restored in defaultRecorder.db');
       } catch (appDbClearError) {
         console.error('Error clearing data from appDb:', appDbClearError);
       }

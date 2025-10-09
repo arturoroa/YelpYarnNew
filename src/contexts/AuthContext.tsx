@@ -34,24 +34,41 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   const [sessionHistory, setSessionHistory] = useState<AuthSession[]>([]);
 
   useEffect(() => {
-    try {
-      // Cargar usuario actual
-      const savedUser = localStorage.getItem('authUser');
-      if (savedUser) {
-        const parsedUser = JSON.parse(savedUser);
-        setUser(parsedUser);
-        setIsAuthenticated(true);
+    const loadUserData = async () => {
+      try {
+        // Cargar usuario actual desde localStorage
+        const savedUser = localStorage.getItem('authUser');
+        if (savedUser) {
+          const parsedUser = JSON.parse(savedUser);
+          setUser(parsedUser);
+          setIsAuthenticated(true);
+        }
+
+        // Cargar historial de sesiones desde la base de datos
+        try {
+          const response = await fetch('/api/user-sessions');
+          if (response.ok) {
+            const sessions = await response.json();
+            const formattedSessions = sessions.map((s: any) => ({
+              id: s.id,
+              username: s.username,
+              loginTime: s.loginTime,
+              logoutTime: s.logoutTime,
+              ipAddress: s.ipAddress,
+              status: s.status
+            }));
+            setSessionHistory(formattedSessions);
+          }
+        } catch (error) {
+          console.error("Error loading session history from database:", error);
+        }
+      } catch (error) {
+        console.error("Error loading saved data:", error);
+        localStorage.removeItem('authUser');
       }
-      
-      // Cargar historial de sesiones
-      const savedHistory = localStorage.getItem('sessionHistory');
-      if (savedHistory) {
-        setSessionHistory(JSON.parse(savedHistory));
-      }
-    } catch (error) {
-      console.error("Error loading saved data:", error);
-      localStorage.removeItem('authUser');
-    }
+    };
+
+    loadUserData();
   }, []);
 
   const generateSessionId = (): string => {
@@ -97,6 +114,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           status: 'active'
         };
 
+        // Guardar sesión en la base de datos
+        try {
+          await fetch('/api/user-sessions', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(newSession)
+          });
+        } catch (error) {
+          console.error('Error saving session to database:', error);
+        }
+
         // Actualizar usuario y sesión
         setUser(authUser);
         setIsAuthenticated(true);
@@ -107,7 +135,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         // Guardar en localStorage
         localStorage.setItem('authUser', JSON.stringify(authUser));
-        localStorage.setItem('sessionHistory', JSON.stringify(updatedHistory));
 
         return true;
       }
@@ -131,9 +158,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       );
 
       setSessionHistory(updatedHistory);
-      localStorage.setItem('sessionHistory', JSON.stringify(updatedHistory));
 
-      // Log system action via backend
+      // Actualizar sesión en la base de datos y log system action via backend
       fetch('/api/auth/logout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
@@ -143,6 +169,18 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
         })
       }).catch(error => {
         console.error('Failed to log logout action:', error);
+      });
+
+      // Actualizar sesión en la base de datos
+      fetch(`/api/user-sessions/${user.sessionId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          logoutTime,
+          status: 'completed'
+        })
+      }).catch(error => {
+        console.error('Failed to update session in database:', error);
       });
     }
 
