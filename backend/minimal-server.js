@@ -562,7 +562,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
 
         // Clear all data except user 'aroa'
         if (integrationDb.dbType === 'sqlite') {
-          const tables = ['test_sessions', 'system_logs', 'integrations'];
+          const tables = ['test_sessions', 'system_logs', 'integrations', 'environments'];
           for (const table of tables) {
             const tableExists = integrationDb.connection.prepare(
               `SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`
@@ -586,7 +586,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
 
           console.log('All data cleared from SQLite database (kept user aroa)');
         } else if (integrationDb.dbType === 'postgresql') {
-          const tables = ['test_sessions', 'system_logs', 'integrations'];
+          const tables = ['test_sessions', 'system_logs', 'integrations', 'environments'];
           for (const table of tables) {
             const tableCheck = await integrationDb.connection.query(
               `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${table}')`
@@ -607,7 +607,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
 
           console.log('All data cleared from PostgreSQL database (kept user aroa)');
         } else if (integrationDb.dbType === 'mysql') {
-          const tables = ['test_sessions', 'system_logs', 'integrations'];
+          const tables = ['test_sessions', 'system_logs', 'integrations', 'environments'];
           for (const table of tables) {
             const [tableCheck] = await integrationDb.connection.query(
               `SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${table}'`
@@ -647,7 +647,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
 
       // IMPORTANT: Also clear data from defaultRecorder.db (appDb)
       // since the app will switch back to using it after integration deletion
-      console.log('Clearing data from defaultRecorder.db (appDb)...');
+      console.log('Clearing ALL data from defaultRecorder.db (appDb)...');
       try {
         // Clear test sessions
         if (appDb.db) {
@@ -655,8 +655,8 @@ app.delete('/api/integrations/:id', async (req, res) => {
           clearSessionsStmt.run();
           console.log('Cleared test_sessions from appDb');
 
-          // Clear system logs (except the current deletion log)
-          const clearLogsStmt = appDb.db.prepare("DELETE FROM system_logs WHERE action != 'integration_data_cleared'");
+          // Clear system logs completely
+          const clearLogsStmt = appDb.db.prepare('DELETE FROM system_logs');
           clearLogsStmt.run();
           console.log('Cleared system_logs from appDb');
 
@@ -664,31 +664,42 @@ app.delete('/api/integrations/:id', async (req, res) => {
           const clearUsersStmt = appDb.db.prepare("DELETE FROM yelp_users WHERE username != 'aroa'");
           clearUsersStmt.run();
           console.log('Cleared yelp_users from appDb (kept user aroa)');
+
+          // Clear ALL integrations (including the one being deleted)
+          const clearIntegrationsStmt = appDb.db.prepare('DELETE FROM integrations');
+          clearIntegrationsStmt.run();
+          console.log('Cleared integrations from appDb');
+
+          // Clear ALL environments
+          const clearEnvironmentsStmt = appDb.db.prepare('DELETE FROM environments');
+          clearEnvironmentsStmt.run();
+          console.log('Cleared environments from appDb');
         }
 
-        await logSystemAction(null, 'appdb_data_cleared', {
-          note: 'Cleared all data from defaultRecorder.db except user aroa'
-        });
+        console.log('All data cleared from defaultRecorder.db (kept only user aroa)');
       } catch (appDbClearError) {
         console.error('Error clearing data from appDb:', appDbClearError);
-        await logSystemAction(null, 'appdb_data_clear_failed', {
-          error: appDbClearError.message
-        });
+      }
+
+      // Integration was already deleted as part of clearing all integrations from appDb
+      // No need to call deleteIntegration(id) again
+    } else {
+      // For migrations or non-database integrations, delete the integration normally
+      const deleted = appDb.deleteIntegration(id);
+      if (!deleted) {
+        return res.status(500).json({ error: 'Failed to delete integration' });
       }
     }
 
-    const deleted = appDb.deleteIntegration(id);
-    if (!deleted) {
-      return res.status(500).json({ error: 'Failed to delete integration' });
+    // Don't log to system_logs since they were cleared
+    if (integration.type !== 'database' || shouldMigrate) {
+      await logSystemAction(null, 'integration_deleted', {
+        integration_id: id,
+        integration_name: integration?.name,
+        integration_type: integration?.type,
+        data_migrated: !!migrationResult
+      });
     }
-
-    // Log the action
-    await logSystemAction(null, 'integration_deleted', {
-      integration_id: id,
-      integration_name: integration?.name,
-      integration_type: integration?.type,
-      data_migrated: !!migrationResult
-    });
 
     console.log('Successfully deleted integration');
     res.json({
