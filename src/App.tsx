@@ -9,9 +9,10 @@ import EnvironmentSelector from "./components/EnvironmentSelector";
 import { Header } from "./components/Header";
 import SessionViewer from "./components/SessionViewer";
 import TestLogs from "./components/TestLogs";
+import Users from "./components/Users";
 import { LogOut, User, Clock } from 'lucide-react';
 
-type ActiveView = 'dashboard' | 'test-runner' | 'session-viewer' | 'test-logs' | 'system-logs' | 'integrations' | 'environment-settings';
+type ActiveView = 'dashboard' | 'users' | 'test-runner' | 'session-viewer' | 'test-logs' | 'system-logs' | 'integrations' | 'environment-settings';
 
 // Componente de barra de usuario
 const UserBar: React.FC = () => {
@@ -82,10 +83,12 @@ const AppContent: React.FC = () => {
   const renderActiveView = () => {
     switch (activeView) {
       case 'dashboard':
-        return <Dashboard 
+        return <Dashboard
           onViewSession={handleViewSession}
-          selectedEnvironment={selectedEnvironment} 
+          selectedEnvironment={selectedEnvironment}
         />;
+      case 'users':
+        return <Users />;
       case 'test-runner':
         return <TestRunner />;
       case 'session-viewer':
@@ -97,14 +100,14 @@ const AppContent: React.FC = () => {
       case 'integrations':
         return <Integrations />;
       case 'environment-settings':
-        return <EnvironmentSelector 
+        return <EnvironmentSelector
           selectedEnvironment={selectedEnvironment}
           onEnvironmentChange={setSelectedEnvironment}
         />;
       default:
-        return <Dashboard 
+        return <Dashboard
           onViewSession={handleViewSession}
-          selectedEnvironment={selectedEnvironment} 
+          selectedEnvironment={selectedEnvironment}
         />;
     }
   };

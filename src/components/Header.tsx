@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
-import { Home, Play, Database, Eye, FileText, Settings, Target, Globe } from 'lucide-react';
+import { Home, Play, Database, Eye, FileText, Settings, Target, Globe, Users } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
-export type ActiveView = 'dashboard' | 'test-runner' | 'session-viewer' | 'test-logs' | 'system-logs' | 'integrations' | 'environment-settings';
+export type ActiveView = 'dashboard' | 'users' | 'test-runner' | 'session-viewer' | 'test-logs' | 'system-logs' | 'integrations' | 'environment-settings';
 
 interface HeaderProps {
   activeView: ActiveView;
@@ -10,9 +11,11 @@ interface HeaderProps {
 
 export function Header({ activeView, onViewChange }: HeaderProps) {
   const [showDocumentation, setShowDocumentation] = useState(false);
+  const { isSystemAdmin } = useAuth();
 
-  const navigationItems = [
+  const allNavigationItems = [
     { id: 'dashboard' as ActiveView, label: 'Dashboard', icon: Home },
+    { id: 'users' as ActiveView, label: 'Users', icon: Users, adminOnly: true },
     { id: 'test-runner' as ActiveView, label: 'Test Runner', icon: Play },
     { id: 'session-viewer' as ActiveView, label: 'Session Viewer', icon: Eye },
     { id: 'test-logs' as ActiveView, label: 'Test Logs', icon: Target },
@@ -20,6 +23,8 @@ export function Header({ activeView, onViewChange }: HeaderProps) {
     { id: 'integrations' as ActiveView, label: 'Integrations', icon: Database },
     { id: 'environment-settings' as ActiveView, label: 'Environment Settings', icon: Target },
   ];
+
+  const navigationItems = allNavigationItems.filter(item => !item.adminOnly || isSystemAdmin);
 
   return (
     <header className="bg-white shadow-sm border-b border-gray-200">

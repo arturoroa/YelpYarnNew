@@ -178,17 +178,26 @@ export default function Integrations() {
 
   const handleDeleteIntegration = async (id: string) => {
     try {
+      // Get environments from localStorage to check usage
+      const environmentsStr = localStorage.getItem('environments');
+      const environments = environmentsStr ? JSON.parse(environmentsStr) : [];
+
       const response = await fetch(`/api/integrations/${id}`, {
-        method: 'DELETE'
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ environments })
       });
 
-      if (!response.ok) throw new Error('Failed to delete integration');
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.error || 'Failed to delete integration');
+      }
 
       await fetchIntegrations();
       showToast('Integration deleted successfully', 'success');
     } catch (error) {
       console.error('Error deleting integration:', error);
-      showToast('Failed to delete integration', 'error');
+      showToast(error instanceof Error ? error.message : 'Failed to delete integration', 'error');
     }
   };
 

@@ -36,6 +36,7 @@ export class DefaultRecorderDB {
         username TEXT NOT NULL UNIQUE,
         password TEXT NOT NULL,
         type TEXT NOT NULL,
+        email TEXT,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
@@ -433,18 +434,68 @@ export class DefaultRecorderDB {
   }
 
   getAllSystemUsers() {
-    const stmt = this.db.prepare('SELECT id, username, type, created_at, updated_at FROM system_users');
+    const stmt = this.db.prepare('SELECT id, username, type, email, created_at, updated_at FROM system_users');
     return stmt.all();
   }
 
-  createSystemUser(username, password, type = 'user') {
+  createSystemUser(username, password, type = 'user', email = null) {
     const id = randomUUID();
-    const stmt = this.db.prepare(`
-      INSERT INTO system_users (id, username, password, type)
-      VALUES (?, ?, ?, ?)
+
+    this.db.exec(`
+      ALTER TABLE system_users ADD COLUMN IF NOT EXISTS email TEXT;
     `);
-    stmt.run(id, username, password, type);
-    return { id, username, type };
+
+    const stmt = this.db.prepare(`
+      INSERT INTO system_users (id, username, password, type, email)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+    stmt.run(id, username, password, type, email);
+    return { id, username, type, email };
+  }
+
+  getSystemUser(id) {
+    const stmt = this.db.prepare('SELECT id, username, type, email, created_at, updated_at FROM system_users WHERE id = ?');
+    return stmt.get(id);
+  }
+
+  updateSystemUser(id, data) {
+    const updates = [];
+    const values = [];
+
+    if (data.username) {
+      updates.push('username = ?');
+      values.push(data.username);
+    }
+    if (data.password) {
+      updates.push('password = ?');
+      values.push(data.password);
+    }
+    if (data.email !== undefined) {
+      updates.push('email = ?');
+      values.push(data.email);
+    }
+    if (data.type) {
+      updates.push('type = ?');
+      values.push(data.type);
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+
+    const stmt = this.db.prepare(`
+      UPDATE system_users
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `);
+    stmt.run(...values);
+
+    return this.getSystemUser(id);
+  }
+
+  deleteSystemUser(id) {
+    const stmt = this.db.prepare('DELETE FROM system_users WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
   }
 
   close() {

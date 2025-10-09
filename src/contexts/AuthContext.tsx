@@ -11,6 +11,7 @@ export interface AuthSession {
 
 interface AuthUser {
   username: string;
+  type: string;
   loginTime: string;
   ipAddress: string;
   sessionId: string;
@@ -19,6 +20,7 @@ interface AuthUser {
 interface AuthContextType {
   user: AuthUser | null;
   isAuthenticated: boolean;
+  isSystemAdmin: boolean;
   sessionHistory: AuthSession[];
   login: (username: string, password: string) => Promise<boolean>;
   logout: () => void;
@@ -81,6 +83,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
         const authUser: AuthUser = {
           username: result.user.username,
+          type: result.user.type,
           loginTime,
           ipAddress,
           sessionId
@@ -149,9 +152,12 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('authUser');
   };
   
+  const isSystemAdmin = user?.type === 'systemadmin';
+
   const contextValue: AuthContextType = {
     user,
     isAuthenticated,
+    isSystemAdmin,
     sessionHistory,
     login,
     logout

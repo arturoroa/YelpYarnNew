@@ -224,6 +224,84 @@ app.get('/api/system-users', async (req, res) => {
   }
 });
 
+app.post('/api/system-users', async (req, res) => {
+  try {
+    const { username, password, email, type } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (!appDb || !appDb.createSystemUser) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const user = appDb.createSystemUser(username, password, type || 'user', email);
+
+    await logSystemAction(null, 'system_user_created', {
+      user_id: user.id,
+      username: user.username,
+      type: user.type
+    });
+
+    res.status(201).json(user);
+  } catch (error) {
+    console.error('Error creating system user:', error);
+    res.status(500).json({ error: error.message || 'Failed to create user' });
+  }
+});
+
+app.put('/api/system-users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const { username, password, email, type } = req.body;
+
+    if (!appDb || !appDb.updateSystemUser) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const user = appDb.updateSystemUser(id, { username, password, email, type });
+
+    await logSystemAction(null, 'system_user_updated', {
+      user_id: id,
+      username: user.username,
+      type: user.type
+    });
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating system user:', error);
+    res.status(500).json({ error: error.message || 'Failed to update user' });
+  }
+});
+
+app.delete('/api/system-users/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+
+    if (!appDb || !appDb.deleteSystemUser) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const user = appDb.getSystemUser(id);
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    appDb.deleteSystemUser(id);
+
+    await logSystemAction(null, 'system_user_deleted', {
+      user_id: id,
+      username: user.username
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting system user:', error);
+    res.status(500).json({ error: error.message || 'Failed to delete user' });
+  }
+});
+
 // Get primary database integration (first connected database from local SQLite)
 function getPrimaryIntegration() {
   if (!appDb || !appDb.getAllIntegrations) {
@@ -368,6 +446,7 @@ app.put('/api/integrations/:id', async (req, res) => {
 app.delete('/api/integrations/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const { environments } = req.body;
     console.log('Deleting integration with id:', id);
 
     if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
@@ -377,6 +456,22 @@ app.delete('/api/integrations/:id', async (req, res) => {
     const integration = appDb.getIntegration(id);
     if (!integration) {
       return res.status(404).json({ error: 'Integration not found' });
+    }
+
+    // Check if integration is used in any environment
+    if (environments && Array.isArray(environments)) {
+      const usedInEnvironments = environments.filter(env => {
+        const integrations = env.integrations || {};
+        return Object.values(integrations).includes(id);
+      });
+
+      if (usedInEnvironments.length > 0) {
+        const envNames = usedInEnvironments.map(env => env.name).join(', ');
+        return res.status(400).json({
+          error: `Cannot delete integration. It is currently used in the following environments: ${envNames}`,
+          environmentNames: envNames
+        });
+      }
     }
 
     const deleted = appDb.deleteIntegration(id);

@@ -1,6 +1,7 @@
 import React from 'react';
 import { NavLink } from 'react-router-dom';
 import { Home, Activity, Settings, Database, Users, File, Shield, BookOpen } from 'lucide-react';
+import { useAuth } from '../contexts/AuthContext';
 
 interface SidebarLinkProps {
   to: string;
@@ -23,19 +24,23 @@ const SidebarLink: React.FC<SidebarLinkProps> = ({ to, icon, label }) => (
 );
 
 const Sidebar: React.FC = () => {
+  const { isSystemAdmin } = useAuth();
+
   return (
     <div className="w-64 h-full bg-white border-r border-gray-200 flex flex-col">
       <div className="p-4 border-b border-gray-200">
         <h2 className="text-xl font-bold text-gray-800">Yelp ClickTester</h2>
         <p className="text-sm text-gray-500">SOX Compliance Testing</p>
       </div>
-      
+
       <div className="flex-1 overflow-y-auto py-4">
         <nav className="px-2 space-y-1">
           <SidebarLink to="/" icon={<Home size={20} />} label="Dashboard" />
+          {isSystemAdmin && (
+            <SidebarLink to="/users" icon={<Users size={20} />} label="Users" />
+          )}
           <SidebarLink to="/tests" icon={<Activity size={20} />} label="Test Runner" />
           <SidebarLink to="/sessions" icon={<Database size={20} />} label="Sessions" />
-          <SidebarLink to="/users" icon={<Users size={20} />} label="User Management" />
           <SidebarLink to="/reports" icon={<File size={20} />} label="Reports" />
           <SidebarLink to="/integrations" icon={<Shield size={20} />} label="Integrations" />
           <SidebarLink to="/logs" icon={<BookOpen size={20} />} label="System Logs" />
