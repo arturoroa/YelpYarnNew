@@ -594,6 +594,76 @@ export class DefaultRecorderDB {
     return result.changes > 0;
   }
 
+  // User Session methods
+  createUserSession(sessionData) {
+    const id = sessionData.id || randomUUID();
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO user_sessions (id, username, loginTime, logoutTime, ipAddress, status, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      sessionData.username,
+      sessionData.loginTime || now,
+      sessionData.logoutTime || null,
+      sessionData.ipAddress || null,
+      sessionData.status || 'active',
+      now,
+      now
+    );
+
+    return this.getUserSession(id);
+  }
+
+  getUserSession(id) {
+    const stmt = this.db.prepare('SELECT * FROM user_sessions WHERE id = ?');
+    return stmt.get(id);
+  }
+
+  getAllUserSessions() {
+    const stmt = this.db.prepare('SELECT * FROM user_sessions ORDER BY created_at DESC');
+    return stmt.all();
+  }
+
+  updateUserSession(id, updates) {
+    const allowedFields = ['logoutTime', 'status', 'ipAddress'];
+    const updateFields = [];
+    const values = [];
+
+    for (const [key, value] of Object.entries(updates)) {
+      if (allowedFields.includes(key)) {
+        updateFields.push(`${key} = ?`);
+        values.push(value);
+      }
+    }
+
+    if (updateFields.length === 0) {
+      return this.getUserSession(id);
+    }
+
+    updateFields.push('updated_at = ?');
+    values.push(new Date().toISOString());
+    values.push(id);
+
+    const stmt = this.db.prepare(`
+      UPDATE user_sessions
+      SET ${updateFields.join(', ')}
+      WHERE id = ?
+    `);
+    stmt.run(...values);
+
+    return this.getUserSession(id);
+  }
+
+  deleteUserSession(id) {
+    const stmt = this.db.prepare('DELETE FROM user_sessions WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
   close() {
     if (this.db) {
       this.db.close();
