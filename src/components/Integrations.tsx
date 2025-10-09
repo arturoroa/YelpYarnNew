@@ -181,77 +181,36 @@ export default function Integrations() {
 
   const handleDeleteIntegration = async (id: string) => {
     try {
-      // Get environments from localStorage to check usage
-      const environmentsStr = localStorage.getItem('environments');
-      const environments = environmentsStr ? JSON.parse(environmentsStr) : [];
-
       console.log('=== INTEGRATION DELETION CHECK ===');
       console.log('Attempting to delete integration ID:', id);
-      console.log('Type of ID:', typeof id);
-      console.log('All environments from localStorage:', JSON.stringify(environments, null, 2));
 
-      // Find the integration to check its type
       const integration = integrations.find(i => i.id === id);
       if (!integration) {
         throw new Error('Integration not found');
       }
 
-      // Check if integration is used in any environment (client-side validation)
-      const usedInEnvironments = environments.filter((env: any) => {
-        const integrations = env.integrations || {};
-        const integrationValues = Object.values(integrations);
-
-        // Check with strict equality
-        const isUsed = integrationValues.some(val => {
-          const match = val === id;
-          if (match) {
-            console.log(`MATCH FOUND: "${val}" === "${id}"`);
-          }
-          return match;
-        });
-
-        console.log(`Environment "${env.name}":`, {
-          integrations,
-          integrationValues: integrationValues.map(v => `"${v}" (${typeof v})`),
-          isUsed,
-          lookingFor: `"${id}" (${typeof id})`
-        });
-
-        return isUsed;
-      });
-
-      console.log('Environments using this integration:', usedInEnvironments);
-
-      // If integration is in use and is a database, show migration modal
-      if (usedInEnvironments.length > 0) {
-        if (integration.type === 'database') {
-          const envNames = usedInEnvironments.map((env: any) => env.name).join(', ');
-          setMigrationModal({
-            show: true,
-            integrationId: id,
-            integrationName: integration.name,
-            inUse: true
-          });
-          return;
-        } else {
-          // Non-database integrations cannot be deleted if in use
-          const envNames = usedInEnvironments.map((env: any) => env.name).join(', ');
-          const errorMsg = `Cannot delete integration. It is currently used in the following environments: ${envNames}. Please remove it from these environments first.`;
-          console.error(errorMsg);
-          throw new Error(errorMsg);
-        }
-      }
-
-      console.log('Integration not in use, proceeding with deletion...');
+      console.log('Attempting to delete integration...');
 
       const response = await fetch(`/api/integrations/${id}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ environments })
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (!response.ok) {
         const errorData = await response.json();
+
+        if (response.status === 400 && errorData.environmentNames) {
+          if (integration.type === 'database') {
+            setMigrationModal({
+              show: true,
+              integrationId: id,
+              integrationName: integration.name,
+              inUse: true
+            });
+            return;
+          }
+        }
+
         throw new Error(errorData.error || 'Failed to delete integration');
       }
 
@@ -285,13 +244,9 @@ export default function Integrations() {
       showToast(`Data migrated: ${JSON.stringify(migrateResult.migrated)}`, 'success');
 
       // Step 2: Now delete the integration
-      const environmentsStr = localStorage.getItem('environments');
-      const environments = environmentsStr ? JSON.parse(environmentsStr) : [];
-
       const deleteResponse = await fetch(`/api/integrations/${migrationModal.integrationId}`, {
         method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ environments })
+        headers: { 'Content-Type': 'application/json' }
       });
 
       if (!deleteResponse.ok) {

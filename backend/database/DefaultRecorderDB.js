@@ -83,6 +83,14 @@ export class DefaultRecorderDB {
         timestamp TEXT DEFAULT CURRENT_TIMESTAMP,
         created_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS environments (
+        id TEXT PRIMARY KEY,
+        name TEXT NOT NULL UNIQUE,
+        integrations TEXT DEFAULT '{}',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     this.insertDefaultSystemUser();
@@ -513,6 +521,75 @@ export class DefaultRecorderDB {
 
   deleteSystemUser(id) {
     const stmt = this.db.prepare('DELETE FROM system_users WHERE id = ?');
+    const result = stmt.run(id);
+    return result.changes > 0;
+  }
+
+  getEnvironments() {
+    const rows = this.db.prepare('SELECT * FROM environments ORDER BY created_at DESC').all();
+    return rows.map(row => ({
+      ...row,
+      integrations: JSON.parse(row.integrations || '{}')
+    }));
+  }
+
+  getEnvironment(id) {
+    const row = this.db.prepare('SELECT * FROM environments WHERE id = ?').get(id);
+    if (!row) return null;
+    return {
+      ...row,
+      integrations: JSON.parse(row.integrations || '{}')
+    };
+  }
+
+  createEnvironment(data) {
+    const id = data.id || randomUUID();
+    const now = new Date().toISOString();
+
+    const stmt = this.db.prepare(`
+      INSERT INTO environments (id, name, integrations, created_at, updated_at)
+      VALUES (?, ?, ?, ?, ?)
+    `);
+
+    stmt.run(
+      id,
+      data.name,
+      JSON.stringify(data.integrations || {}),
+      now,
+      now
+    );
+
+    return this.getEnvironment(id);
+  }
+
+  updateEnvironment(id, data) {
+    const updates = [];
+    const values = [];
+
+    if (data.name !== undefined) {
+      updates.push('name = ?');
+      values.push(data.name);
+    }
+    if (data.integrations !== undefined) {
+      updates.push('integrations = ?');
+      values.push(JSON.stringify(data.integrations));
+    }
+
+    updates.push('updated_at = CURRENT_TIMESTAMP');
+    values.push(id);
+
+    const stmt = this.db.prepare(`
+      UPDATE environments
+      SET ${updates.join(', ')}
+      WHERE id = ?
+    `);
+    stmt.run(...values);
+
+    return this.getEnvironment(id);
+  }
+
+  deleteEnvironment(id) {
+    const stmt = this.db.prepare('DELETE FROM environments WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
   }

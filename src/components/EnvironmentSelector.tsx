@@ -112,28 +112,37 @@ export default function EnvironmentSelector({
     }
   };
 
-  const loadEnvironments = () => {
-    // Load from localStorage
-    const storedEnvironments = localStorage.getItem('environments');
-
-    if (storedEnvironments) {
-      try {
-        const parsedEnvironments = JSON.parse(storedEnvironments);
+  const loadEnvironments = async () => {
+    try {
+      const response = await fetch('/api/environments');
+      if (response.ok) {
+        const parsedEnvironments = await response.json();
         setEnvironments(parsedEnvironments);
+        localStorage.setItem('environments', JSON.stringify(parsedEnvironments));
 
-        // Set default selected environment if none selected yet
         if (!selectedEnvironment && parsedEnvironments.length > 0) {
           const activeEnv = parsedEnvironments.find((env: Environment) => env.isActive) || parsedEnvironments[0];
           onEnvironmentChange(activeEnv);
         }
         return;
+      }
+    } catch (error) {
+      console.error('Failed to load environments from API:', error);
+    }
+
+    const storedEnvironments = localStorage.getItem('environments');
+    if (storedEnvironments) {
+      try {
+        const parsedEnvironments = JSON.parse(storedEnvironments);
+        setEnvironments(parsedEnvironments);
+        if (!selectedEnvironment && parsedEnvironments.length > 0) {
+          const activeEnv = parsedEnvironments.find((env: Environment) => env.isActive) || parsedEnvironments[0];
+          onEnvironmentChange(activeEnv);
+        }
       } catch (error) {
         console.error('Failed to load environments from localStorage:', error);
       }
     }
-
-    // If no stored environments, start with empty array
-    setEnvironments([]);
   };
 
   const handleAddEnvironment = () => {
@@ -162,7 +171,7 @@ export default function EnvironmentSelector({
     setShowModal(true);
   };
 
-  const handleSaveEnvironment = () => {
+  const handleSaveEnvironment = async () => {
     if (!formData.name || !formData.endpoints?.yelpBaseUrl) {
       showToast('Please fill the required fields: Name and Base URL', 'error');
       return;
@@ -190,29 +199,40 @@ export default function EnvironmentSelector({
     console.log('Saving environment with integrations:', envToSave.integrations);
     console.log('Full environment object:', envToSave);
 
-    setEnvironments((prev) => {
-      const next = editingEnvironment
-        ? prev.map((e) => (e.id === editingEnvironment.id ? envToSave : e))
-        : [...prev, envToSave];
+    try {
+      const url = editingEnvironment ? `/api/environments/${editingEnvironment.id}` : '/api/environments';
+      const method = editingEnvironment ? 'PUT' : 'POST';
 
-      // If this save sets env active, flip others off
-      if (envToSave.isActive) {
-        for (const e of next) e.isActive = e.id === envToSave.id;
-        onEnvironmentChange(envToSave);
+      const response = await fetch(url, {
+        method,
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(envToSave),
+      });
+
+      if (!response.ok) {
+        throw new Error('Failed to save environment');
       }
-      return next;
-    });
 
-    // Log the action
-    const action = editingEnvironment ? 'environment_updated' : 'environment_created';
-    logSystemAction(action, {
-      environment_id: envToSave.id,
-      environment_name: envToSave.name,
-      type: envToSave.type,
-      integrations: formData.integrations,
-    });
+      const savedEnv = await response.json();
 
-    showToast(`Environment ${editingEnvironment ? 'updated' : 'created'} successfully`, 'success');
+      setEnvironments((prev) => {
+        const next = editingEnvironment
+          ? prev.map((e) => (e.id === editingEnvironment.id ? savedEnv : e))
+          : [...prev, savedEnv];
+
+        if (savedEnv.isActive) {
+          for (const e of next) e.isActive = e.id === savedEnv.id;
+          onEnvironmentChange(savedEnv);
+        }
+        return next;
+      });
+
+      showToast(`Environment ${editingEnvironment ? 'updated' : 'created'} successfully`, 'success');
+    } catch (error) {
+      console.error('Error saving environment:', error);
+      showToast('Failed to save environment', 'error');
+      return;
+    }
 
     setShowModal(false);
     setEditingEnvironment(null);
@@ -231,31 +251,38 @@ export default function EnvironmentSelector({
     setDeleteConfirmation({ id, name: envName });
   };
 
-  const handleDeleteEnvironment = () => {
+  const handleDeleteEnvironment = async () => {
     if (!deleteConfirmation) return;
 
     const { id, name: envName } = deleteConfirmation;
 
-    setEnvironments((prev) => {
-      const remaining = prev.filter((env) => env.id !== id);
+    try {
+      const response = await fetch(`/api/environments/${id}`, {
+        method: 'DELETE',
+      });
 
-      // If we deleted the currently selected env, pick a sensible replacement
-      if (selectedEnvironment?.id === id) {
-        const nextActive = remaining.find((e) => e.isActive) || remaining[0];
-        if (nextActive) onEnvironmentChange(nextActive);
-        else onEnvironmentChange({} as Environment);
+      if (!response.ok) {
+        throw new Error('Failed to delete environment');
       }
 
-      return remaining;
-    });
+      setEnvironments((prev) => {
+        const remaining = prev.filter((env) => env.id !== id);
 
-    // Log the action
-    logSystemAction('environment_deleted', {
-      environment_id: id,
-      environment_name: envName,
-    });
+        if (selectedEnvironment?.id === id) {
+          const nextActive = remaining.find((e) => e.isActive) || remaining[0];
+          if (nextActive) onEnvironmentChange(nextActive);
+          else onEnvironmentChange({} as Environment);
+        }
 
-    showToast(`Environment "${envName}" deleted successfully`, 'success');
+        return remaining;
+      });
+
+      showToast(`Environment "${envName}" deleted successfully`, 'success');
+    } catch (error) {
+      console.error('Error deleting environment:', error);
+      showToast('Failed to delete environment', 'error');
+    }
+
     setDeleteConfirmation(null);
   };
 

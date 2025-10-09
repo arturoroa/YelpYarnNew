@@ -465,9 +465,7 @@ app.put('/api/integrations/:id', async (req, res) => {
 app.delete('/api/integrations/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const { environments } = req.body;
     console.log('Deleting integration with id:', id);
-    console.log('Environments received:', environments ? environments.length : 'none');
 
     if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -478,13 +476,12 @@ app.delete('/api/integrations/:id', async (req, res) => {
       return res.status(404).json({ error: 'Integration not found' });
     }
 
-    // CRITICAL: Always check if integration is used in any environment
-    // Even if environments array is empty or not provided, we must block deletion if ANY environment uses this integration
-    const environmentsToCheck = environments && Array.isArray(environments) ? environments : [];
+    // CRITICAL: Check database for environments using this integration
+    const allEnvironments = appDb.getEnvironments ? appDb.getEnvironments() : [];
 
-    console.log('Checking', environmentsToCheck.length, 'environments for integration usage');
+    console.log('Checking', allEnvironments.length, 'environments from database for integration usage');
 
-    const usedInEnvironments = environmentsToCheck.filter(env => {
+    const usedInEnvironments = allEnvironments.filter(env => {
       const integrations = env.integrations || {};
       const isUsed = Object.values(integrations).includes(id);
       if (isUsed) {
@@ -1258,6 +1255,69 @@ app.get('/api/logs/system/recent', async (req, res) => {
   } catch (error) {
     console.error('Error fetching system logs:', error);
     res.status(500).json({ error: 'Failed to fetch system logs' });
+  }
+});
+
+// Environment endpoints
+app.get('/api/environments', async (req, res) => {
+  try {
+    const environments = appDb.getEnvironments ? appDb.getEnvironments() : [];
+    res.json(environments || []);
+  } catch (error) {
+    console.error('Error fetching environments:', error);
+    res.status(500).json({ error: 'Failed to fetch environments' });
+  }
+});
+
+app.post('/api/environments', async (req, res) => {
+  try {
+    const environment = appDb.createEnvironment ? appDb.createEnvironment(req.body) : null;
+    if (!environment) {
+      return res.status(500).json({ error: 'Failed to create environment' });
+    }
+    await logSystemAction(null, 'environment_created', {
+      environment_id: environment.id,
+      environment_name: environment.name
+    });
+    res.json(environment);
+  } catch (error) {
+    console.error('Error creating environment:', error);
+    res.status(500).json({ error: 'Failed to create environment' });
+  }
+});
+
+app.put('/api/environments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const environment = appDb.updateEnvironment ? appDb.updateEnvironment(id, req.body) : null;
+    if (!environment) {
+      return res.status(404).json({ error: 'Environment not found' });
+    }
+    await logSystemAction(null, 'environment_updated', {
+      environment_id: id,
+      environment_name: environment.name
+    });
+    res.json(environment);
+  } catch (error) {
+    console.error('Error updating environment:', error);
+    res.status(500).json({ error: 'Failed to update environment' });
+  }
+});
+
+app.delete('/api/environments/:id', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const deleted = appDb.deleteEnvironment ? appDb.deleteEnvironment(id) : false;
+    if (!deleted) {
+      return res.status(404).json({ error: 'Environment not found' });
+    }
+    await logSystemAction(null, 'environment_deleted', {
+      environment_id: id
+    });
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting environment:', error);
+    res.status(500).json({ error: 'Failed to delete environment' });
   }
 });
 
