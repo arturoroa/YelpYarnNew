@@ -190,7 +190,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     localStorage.removeItem('authUser');
   };
   
-  const isSystemAdmin = user?.type === 'systemadmin';
+  const isSystemAdmin = user?.type === 'SystemUser';
 
   const contextValue: AuthContextType = {
     user,

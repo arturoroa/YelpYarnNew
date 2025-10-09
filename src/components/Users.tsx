@@ -4,10 +4,11 @@ import { Users as UsersIcon, Plus, Pencil, Trash2, Save, X, Search } from 'lucid
 interface User {
   id: string;
   username: string;
+  password: string;
   email?: string;
-  type: 'systemadmin' | 'user' | 'testuser';
-  created_at: string;
-  updated_at?: string;
+  type_of_user: 'SystemUser' | 'RegularUser' | 'TestUser';
+  created_by?: string;
+  creation_time: string;
 }
 
 export default function Users() {
@@ -20,7 +21,8 @@ export default function Users() {
     username: '',
     password: '',
     email: '',
-    type: 'user' as 'systemadmin' | 'user' | 'testuser'
+    type_of_user: 'TestUser' as 'SystemUser' | 'RegularUser' | 'TestUser',
+    created_by: ''
   });
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; type: 'success' | 'error' | 'info' }>>([]);
 
@@ -41,7 +43,7 @@ export default function Users() {
       const filtered = users.filter(user =>
         user.username.toLowerCase().includes(searchTerm.toLowerCase()) ||
         user.email?.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        user.type.toLowerCase().includes(searchTerm.toLowerCase())
+        user.type_of_user.toLowerCase().includes(searchTerm.toLowerCase())
       );
       setFilteredUsers(filtered);
     } else {
@@ -51,7 +53,7 @@ export default function Users() {
 
   const fetchUsers = async () => {
     try {
-      const response = await fetch('/api/system-users');
+      const response = await fetch('/api/users');
       if (response.ok) {
         const data = await response.json();
         setUsers(data);
@@ -69,10 +71,16 @@ export default function Users() {
     }
 
     try {
-      const response = await fetch('/api/system-users', {
+      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
+      const dataToSend = {
+        ...formData,
+        created_by: currentUser.username || 'system'
+      };
+
+      const response = await fetch('/api/users', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(dataToSend)
       });
 
       if (!response.ok) {
@@ -82,7 +90,7 @@ export default function Users() {
 
       await fetchUsers();
       setShowAddForm(false);
-      setFormData({ username: '', password: '', email: '', type: 'user' });
+      setFormData({ username: '', password: '', email: '', type_of_user: 'TestUser', created_by: '' });
       showToast('User created successfully', 'success');
     } catch (error) {
       console.error('Error creating user:', error);
@@ -92,7 +100,7 @@ export default function Users() {
 
   const handleUpdateUser = async (id: string) => {
     try {
-      const response = await fetch(`/api/system-users/${id}`, {
+      const response = await fetch(`/api/users/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(formData)
@@ -105,7 +113,7 @@ export default function Users() {
 
       await fetchUsers();
       setEditingId(null);
-      setFormData({ username: '', password: '', email: '', type: 'user' });
+      setFormData({ username: '', password: '', email: '', type_of_user: 'TestUser', created_by: '' });
       showToast('User updated successfully', 'success');
     } catch (error) {
       console.error('Error updating user:', error);
@@ -119,7 +127,7 @@ export default function Users() {
     }
 
     try {
-      const response = await fetch(`/api/system-users/${id}`, {
+      const response = await fetch(`/api/users/${id}`, {
         method: 'DELETE'
       });
 
@@ -142,7 +150,8 @@ export default function Users() {
       username: user.username,
       password: '',
       email: user.email || '',
-      type: user.type
+      type_of_user: user.type_of_user,
+      created_by: user.created_by || ''
     });
   };
 
@@ -153,9 +162,9 @@ export default function Users() {
 
   const getUserTypeColor = (type: string) => {
     switch (type) {
-      case 'systemadmin': return 'bg-purple-100 text-purple-800';
-      case 'user': return 'bg-blue-100 text-blue-800';
-      case 'testuser': return 'bg-green-100 text-green-800';
+      case 'SystemUser': return 'bg-blue-100 text-blue-800';
+      case 'RegularUser': return 'bg-green-100 text-green-800';
+      case 'TestUser': return 'bg-gray-100 text-gray-800';
       default: return 'bg-gray-100 text-gray-800';
     }
   };
@@ -236,13 +245,13 @@ export default function Users() {
                   User Type *
                 </label>
                 <select
-                  value={formData.type}
-                  onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                  value={formData.type_of_user}
+                  onChange={(e) => setFormData({ ...formData, type_of_user: e.target.value as any })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
                 >
-                  <option value="user">User</option>
-                  <option value="systemadmin">System Admin</option>
-                  <option value="testuser">Test User</option>
+                  <option value="SystemUser">System User (can create users)</option>
+                  <option value="RegularUser">Regular User (Users tab hidden)</option>
+                  <option value="TestUser">Test User (cannot login)</option>
                 </select>
               </div>
             </div>
@@ -256,7 +265,7 @@ export default function Users() {
               <button
                 onClick={() => {
                   setShowAddForm(false);
-                  setFormData({ username: '', password: '', email: '', type: 'user' });
+                  setFormData({ username: '', password: '', email: '', type_of_user: 'TestUser', created_by: '' });
                 }}
                 className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
               >
@@ -318,22 +327,22 @@ export default function Users() {
                 <td className="px-6 py-4 whitespace-nowrap">
                   {editingId === user.id ? (
                     <select
-                      value={formData.type}
-                      onChange={(e) => setFormData({ ...formData, type: e.target.value as any })}
+                      value={formData.type_of_user}
+                      onChange={(e) => setFormData({ ...formData, type_of_user: e.target.value as any })}
                       className="px-2 py-1 border border-gray-300 rounded"
                     >
-                      <option value="user">User</option>
-                      <option value="systemadmin">System Admin</option>
-                      <option value="testuser">Test User</option>
+                      <option value="SystemUser">System User</option>
+                      <option value="RegularUser">Regular User</option>
+                      <option value="TestUser">Test User</option>
                     </select>
                   ) : (
-                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getUserTypeColor(user.type)}`}>
-                      {user.type}
+                    <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${getUserTypeColor(user.type_of_user)}`}>
+                      {user.type_of_user}
                     </span>
                   )}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500">
-                  {new Date(user.created_at).toLocaleDateString()}
+                  {new Date(user.creation_time).toLocaleDateString()}
                 </td>
                 <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
                   {editingId === user.id ? (

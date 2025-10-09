@@ -169,24 +169,24 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    if (!appDb || !appDb.verifySystemUser) {
+    if (!appDb || !appDb.verifyUser) {
       return res.status(500).json({ error: 'Database not initialized' });
     }
 
     console.log(`Login attempt for username: ${username}`);
 
-    const user = appDb.verifySystemUser(username, password);
+    const user = appDb.verifyUser(username, password);
 
     if (!user) {
-      console.log(`Login failed for username: ${username} - user not found in system_users table`);
+      console.log(`Login failed for username: ${username} - user not found or not authorized (only SystemUser and RegularUser can login)`);
       return res.status(401).json({ error: 'Invalid username or password' });
     }
 
-    console.log(`Login successful for username: ${username}, type: ${user.type}`);
+    console.log(`Login successful for username: ${username}, type: ${user.type_of_user}`);
 
-    await logSystemAction(user.id, 'system_user_login', {
+    await logSystemAction(user.id, 'user_login', {
       username: user.username,
-      user_type: user.type
+      user_type: user.type_of_user
     });
 
     res.json({
@@ -194,7 +194,8 @@ app.post('/api/auth/login', async (req, res) => {
       user: {
         id: user.id,
         username: user.username,
-        type: user.type
+        type: user.type_of_user,
+        email: user.email
       }
     });
   } catch (error) {
@@ -219,109 +220,17 @@ app.post('/api/auth/logout', async (req, res) => {
   }
 });
 
-app.get('/api/system-users', async (req, res) => {
-  try {
-    if (!appDb || !appDb.getAllSystemUsers) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const users = appDb.getAllSystemUsers();
-    res.json(users);
-  } catch (error) {
-    console.error('Error fetching system users:', error);
-    res.status(500).json({ error: 'Failed to fetch system users' });
-  }
-});
-
-app.get('/api/debug/system-users', async (req, res) => {
+app.get('/api/debug/users', async (req, res) => {
   try {
     if (!appDb || !appDb.db) {
       return res.status(500).json({ error: 'Database not initialized' });
     }
 
-    const users = appDb.db.prepare('SELECT id, username, password, type, email FROM system_users').all();
+    const users = appDb.db.prepare('SELECT * FROM users').all();
     res.json(users);
   } catch (error) {
-    console.error('Error fetching system users:', error);
+    console.error('Error fetching users:', error);
     res.status(500).json({ error: 'Failed to fetch users' });
-  }
-});
-
-app.post('/api/system-users', async (req, res) => {
-  try {
-    const { username, password, email, type } = req.body;
-
-    if (!username || !password) {
-      return res.status(400).json({ error: 'Username and password are required' });
-    }
-
-    if (!appDb || !appDb.createSystemUser) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const user = appDb.createSystemUser(username, password, type || 'user', email);
-
-    await logSystemAction(null, 'system_user_created', {
-      user_id: user.id,
-      username: user.username,
-      type: user.type
-    });
-
-    res.status(201).json(user);
-  } catch (error) {
-    console.error('Error creating system user:', error);
-    res.status(500).json({ error: error.message || 'Failed to create user' });
-  }
-});
-
-app.put('/api/system-users/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-    const { username, password, email, type } = req.body;
-
-    if (!appDb || !appDb.updateSystemUser) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const user = appDb.updateSystemUser(id, { username, password, email, type });
-
-    await logSystemAction(null, 'system_user_updated', {
-      user_id: id,
-      username: user.username,
-      type: user.type
-    });
-
-    res.json(user);
-  } catch (error) {
-    console.error('Error updating system user:', error);
-    res.status(500).json({ error: error.message || 'Failed to update user' });
-  }
-});
-
-app.delete('/api/system-users/:id', async (req, res) => {
-  try {
-    const { id } = req.params;
-
-    if (!appDb || !appDb.deleteSystemUser) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const user = appDb.getSystemUser(id);
-    if (!user) {
-      return res.status(404).json({ error: 'User not found' });
-    }
-
-    appDb.deleteSystemUser(id);
-
-    await logSystemAction(null, 'system_user_deleted', {
-      user_id: id,
-      username: user.username
-    });
-
-    res.json({ success: true });
-  } catch (error) {
-    console.error('Error deleting system user:', error);
-    res.status(500).json({ error: error.message || 'Failed to delete user' });
   }
 });
 
@@ -688,42 +597,33 @@ app.delete('/api/integrations/:id', async (req, res) => {
           appDb.db.prepare('DELETE FROM environments').run();
           console.log('  ✓ Truncated environments');
 
-          appDb.db.prepare('DELETE FROM yelp_users').run();
-          console.log('  ✓ Truncated yelp_users');
+          appDb.db.prepare('DELETE FROM users').run();
+          console.log('  ✓ Truncated users');
 
-          appDb.db.prepare('DELETE FROM system_users').run();
-          console.log('  ✓ Truncated system_users');
+          // Step 2: Verify table is empty
+          const userCount = appDb.db.prepare('SELECT COUNT(*) as count FROM users').get();
+          console.log(`Step 2: Verification - users: ${userCount.count}`);
 
-          // Step 2: Verify tables are empty
-          const yelpCount = appDb.db.prepare('SELECT COUNT(*) as count FROM yelp_users').get();
-          const systemCount = appDb.db.prepare('SELECT COUNT(*) as count FROM system_users').get();
-          console.log(`Step 2: Verification - yelp_users: ${yelpCount.count}, system_users: ${systemCount.count}`);
+          // Step 3: Restore default users (aroa as SystemUser, testuser as TestUser)
+          console.log('Step 3: Restoring default users...');
 
-          // Step 3: Restore ONLY user aroa
-          console.log('Step 3: Restoring ONLY user aroa...');
-
-          // Restore user aroa in yelp_users with a fixed ID to ensure uniqueness
           appDb.db.prepare(`
-            INSERT INTO yelp_users (id, username, email, config, is_active, created_at, updated_at)
-            VALUES ('aroa-yelp-user', 'aroa', 'aroa@example.com', '{}', 1, datetime('now'), datetime('now'))
+            INSERT INTO users (id, username, password, email, created_by, creation_time, type_of_user)
+            VALUES ('aroa-system-user', 'aroa', '123456789', 'aroa@example.com', 'system', datetime('now'), 'SystemUser')
           `).run();
-          console.log('  ✓ Restored yelp user: aroa (id=aroa-yelp-user)');
+          console.log('  ✓ Restored SystemUser: aroa (id=aroa-system-user, password=123456789)');
 
-          // Restore system admin aroa in system_users with a fixed ID
           appDb.db.prepare(`
-            INSERT INTO system_users (id, username, password, type, email, created_at, updated_at)
-            VALUES ('aroa-system-admin', 'aroa', '123456789', 'systemadmin', 'aroa@example.com', datetime('now'), datetime('now'))
+            INSERT INTO users (id, username, password, email, created_by, creation_time, type_of_user)
+            VALUES ('testuser-1', 'testuser', 'testpass', 'test@example.com', 'system', datetime('now'), 'TestUser')
           `).run();
-          console.log('  ✓ Restored system admin: aroa (id=aroa-system-admin, password=123456789)');
+          console.log('  ✓ Restored TestUser: testuser (id=testuser-1)');
 
           // Step 4: Final verification
-          const finalYelpCount = appDb.db.prepare('SELECT COUNT(*) as count FROM yelp_users').get();
-          const finalSystemCount = appDb.db.prepare('SELECT COUNT(*) as count FROM system_users').get();
-          const yelpUsers = appDb.db.prepare('SELECT username FROM yelp_users').all();
-          const systemUsers = appDb.db.prepare('SELECT username FROM system_users').all();
+          const finalUserCount = appDb.db.prepare('SELECT COUNT(*) as count FROM users').get();
+          const allUsers = appDb.db.prepare('SELECT username, type_of_user FROM users').all();
 
-          console.log(`Step 4: Final state - yelp_users: ${finalYelpCount.count} (${yelpUsers.map(u => u.username).join(', ')})`);
-          console.log(`            system_users: ${finalSystemCount.count} (${systemUsers.map(u => u.username).join(', ')})`);
+          console.log(`Step 4: Final state - users: ${finalUserCount.count} (${allUsers.map(u => `${u.username}:${u.type_of_user}`).join(', ')})`);
         }
 
         console.log('✓ All tables truncated and ONLY user aroa restored in defaultRecorder.db');
@@ -1642,10 +1542,20 @@ app.post('/api/tests/stop/:sessionId', async (req, res) => {
 });
 
 // User endpoints
+app.get('/api/users', async (req, res) => {
+  try {
+    const users = appDb.getAllUsers();
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 app.get('/api/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = appDb.getYelpUser(userId);
+    const user = appDb.getUser(userId);
     res.json(user || null);
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -1656,7 +1566,7 @@ app.get('/api/users/:userId', async (req, res) => {
 app.get('/api/users/check/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const user = appDb.getYelpUserByUsername(username);
+    const user = appDb.getUserByUsername(username);
     res.json({ exists: !!user, user: user || null });
   } catch (error) {
     console.error('Error checking user:', error);
@@ -1664,28 +1574,79 @@ app.get('/api/users/check/:username', async (req, res) => {
   }
 });
 
-app.post('/api/users/create', async (req, res) => {
+app.post('/api/users', async (req, res) => {
   try {
     const userData = req.body;
-    const user = appDb.createYelpUser(userData);
 
-    await logSystemAction(null, 'test_user_created', {
+    if (!userData.username || !userData.password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (!userData.type_of_user) {
+      userData.type_of_user = 'TestUser';
+    }
+
+    const user = appDb.createUser(userData);
+
+    await logSystemAction(userData.created_by || null, 'user_created', {
       user_id: user.id,
       username: user.username,
-      email: user.email
+      type_of_user: user.type_of_user
     });
 
     res.json(user);
   } catch (error) {
     console.error('Error creating user:', error);
 
-    // Log the error
-    await logSystemAction(null, 'test_user_creation_failed', {
+    await logSystemAction(null, 'user_creation_failed', {
       username: req.body.username,
       error: error.message
     });
 
     res.status(500).json({ error: 'Failed to create user' });
+  }
+});
+
+app.put('/api/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const updates = req.body;
+
+    const user = appDb.updateUser(userId, updates);
+
+    if (!user) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await logSystemAction(updates.updated_by || null, 'user_updated', {
+      user_id: userId,
+      username: user.username
+    });
+
+    res.json(user);
+  } catch (error) {
+    console.error('Error updating user:', error);
+    res.status(500).json({ error: 'Failed to update user' });
+  }
+});
+
+app.delete('/api/users/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const deleted = appDb.deleteUser(userId);
+
+    if (!deleted) {
+      return res.status(404).json({ error: 'User not found' });
+    }
+
+    await logSystemAction(null, 'user_deleted', {
+      user_id: userId
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error deleting user:', error);
+    res.status(500).json({ error: 'Failed to delete user' });
   }
 });
 

@@ -11,15 +11,15 @@ const REQUIRED_TABLES = {
       updated_at: { type: 'TEXT', default: 'CURRENT_TIMESTAMP' }
     }
   },
-  yelp_users: {
+  users: {
     columns: {
       id: { type: 'TEXT', primaryKey: true },
       username: { type: 'TEXT', unique: true, notNull: true },
+      password: { type: 'TEXT', notNull: true },
       email: { type: 'TEXT' },
-      config: { type: 'TEXT', default: '{}' },
-      is_active: { type: 'INTEGER', default: 1 },
-      created_at: { type: 'TEXT', default: 'CURRENT_TIMESTAMP' },
-      updated_at: { type: 'TEXT', default: 'CURRENT_TIMESTAMP' }
+      created_by: { type: 'TEXT' },
+      creation_time: { type: 'TEXT', default: 'CURRENT_TIMESTAMP' },
+      type_of_user: { type: 'TEXT', notNull: true, default: "'TestUser'" }
     }
   },
   test_sessions: {
