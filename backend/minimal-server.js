@@ -553,12 +553,97 @@ app.delete('/api/integrations/:id', async (req, res) => {
         });
       }
     } else if (integration.type === 'database' && !shouldMigrate) {
-      console.log(`Deleting database integration ${integration.name} without migration (data will be lost)`);
-      await logSystemAction(null, 'integration_deleted_without_migration', {
-        integration_id: id,
-        integration_name: integration.name,
-        note: 'User chose to delete without migrating data'
-      });
+      console.log(`Deleting data from database integration ${integration.name} (data will be lost)`);
+
+      try {
+        const { IntegrationDB } = await import('./database/IntegrationDB.js');
+        const integrationDb = new IntegrationDB(integration);
+        await integrationDb.connect();
+
+        // Clear all data except user 'aroa'
+        if (integrationDb.dbType === 'sqlite') {
+          const tables = ['test_sessions', 'system_logs', 'integrations'];
+          for (const table of tables) {
+            const tableExists = integrationDb.connection.prepare(
+              `SELECT name FROM sqlite_master WHERE type='table' AND name='${table}'`
+            ).get();
+            if (tableExists) {
+              const stmt = integrationDb.connection.prepare(`DELETE FROM ${table}`);
+              stmt.run();
+              console.log(`Cleared data from table: ${table}`);
+            }
+          }
+
+          // Delete all yelp_users except 'aroa'
+          const usersTableExists = integrationDb.connection.prepare(
+            "SELECT name FROM sqlite_master WHERE type='table' AND name='yelp_users'"
+          ).get();
+          if (usersTableExists) {
+            const deleteUsersStmt = integrationDb.connection.prepare("DELETE FROM yelp_users WHERE username != 'aroa'");
+            deleteUsersStmt.run();
+            console.log('Cleared yelp_users (kept user aroa)');
+          }
+
+          console.log('All data cleared from SQLite database (kept user aroa)');
+        } else if (integrationDb.dbType === 'postgresql') {
+          const tables = ['test_sessions', 'system_logs', 'integrations'];
+          for (const table of tables) {
+            const tableCheck = await integrationDb.connection.query(
+              `SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = '${table}')`
+            );
+            if (tableCheck.rows[0].exists) {
+              await integrationDb.connection.query(`DELETE FROM ${table}`);
+              console.log(`Cleared data from table: ${table}`);
+            }
+          }
+
+          const usersTableCheck = await integrationDb.connection.query(
+            "SELECT EXISTS (SELECT FROM information_schema.tables WHERE table_name = 'yelp_users')"
+          );
+          if (usersTableCheck.rows[0].exists) {
+            await integrationDb.connection.query("DELETE FROM yelp_users WHERE username != 'aroa'");
+            console.log('Cleared yelp_users (kept user aroa)');
+          }
+
+          console.log('All data cleared from PostgreSQL database (kept user aroa)');
+        } else if (integrationDb.dbType === 'mysql') {
+          const tables = ['test_sessions', 'system_logs', 'integrations'];
+          for (const table of tables) {
+            const [tableCheck] = await integrationDb.connection.query(
+              `SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = '${table}'`
+            );
+            if (tableCheck[0].count > 0) {
+              await integrationDb.connection.query(`DELETE FROM ${table}`);
+              console.log(`Cleared data from table: ${table}`);
+            }
+          }
+
+          const [usersTableCheck] = await integrationDb.connection.query(
+            "SELECT COUNT(*) as count FROM information_schema.tables WHERE table_schema = DATABASE() AND table_name = 'yelp_users'"
+          );
+          if (usersTableCheck[0].count > 0) {
+            await integrationDb.connection.query("DELETE FROM yelp_users WHERE username != 'aroa'");
+            console.log('Cleared yelp_users (kept user aroa)');
+          }
+
+          console.log('All data cleared from MySQL database (kept user aroa)');
+        }
+
+        await integrationDb.disconnect();
+
+        await logSystemAction(null, 'integration_data_cleared', {
+          integration_id: id,
+          integration_name: integration.name,
+          note: 'All data cleared except user aroa'
+        });
+      } catch (clearError) {
+        console.error('Error clearing data from integration database:', clearError);
+        await logSystemAction(null, 'integration_data_clear_failed', {
+          integration_id: id,
+          integration_name: integration.name,
+          error: clearError.message
+        });
+      }
     }
 
     const deleted = appDb.deleteIntegration(id);
