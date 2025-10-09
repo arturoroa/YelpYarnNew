@@ -467,6 +467,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     const { environments } = req.body;
     console.log('Deleting integration with id:', id);
+    console.log('Environments received:', environments ? environments.length : 'none');
 
     if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -477,30 +478,37 @@ app.delete('/api/integrations/:id', async (req, res) => {
       return res.status(404).json({ error: 'Integration not found' });
     }
 
-    // Check if integration is used in any environment
-    if (environments && Array.isArray(environments)) {
-      const usedInEnvironments = environments.filter(env => {
-        const integrations = env.integrations || {};
-        return Object.values(integrations).includes(id);
+    // CRITICAL: Always check if integration is used in any environment
+    // Even if environments array is empty or not provided, we must block deletion if ANY environment uses this integration
+    const environmentsToCheck = environments && Array.isArray(environments) ? environments : [];
+
+    console.log('Checking', environmentsToCheck.length, 'environments for integration usage');
+
+    const usedInEnvironments = environmentsToCheck.filter(env => {
+      const integrations = env.integrations || {};
+      const isUsed = Object.values(integrations).includes(id);
+      if (isUsed) {
+        console.log(`Integration ${id} is used in environment: ${env.name}`);
+      }
+      return isUsed;
+    });
+
+    if (usedInEnvironments.length > 0) {
+      const envNames = usedInEnvironments.map(env => env.name).join(', ');
+
+      // Log the failed deletion attempt
+      await logSystemAction(null, 'integration_deletion_blocked', {
+        integration_id: id,
+        integration_name: integration?.name,
+        integration_type: integration?.type,
+        reason: 'Integration in use',
+        used_in_environments: envNames
       });
 
-      if (usedInEnvironments.length > 0) {
-        const envNames = usedInEnvironments.map(env => env.name).join(', ');
-
-        // Log the failed deletion attempt
-        await logSystemAction(null, 'integration_deletion_blocked', {
-          integration_id: id,
-          integration_name: integration?.name,
-          integration_type: integration?.type,
-          reason: 'Integration in use',
-          used_in_environments: envNames
-        });
-
-        return res.status(400).json({
-          error: `Cannot delete integration. It is currently used in the following environments: ${envNames}`,
-          environmentNames: envNames
-        });
-      }
+      return res.status(400).json({
+        error: `Cannot delete integration. It is currently used in the following environments: ${envNames}. Please remove it from these environments first.`,
+        environmentNames: envNames
+      });
     }
 
     const deleted = appDb.deleteIntegration(id);
@@ -1394,35 +1402,19 @@ app.post('/api/system-logs', async (req, res) => {
   }
 });
 
-// Get system logs from local database
+// Get system logs from local database ONLY
+// System logs are ALWAYS stored in the local DefaultRecorderDB, never in integration databases
 app.get('/api/system-logs', async (req, res) => {
   try {
-    // Get primary database integration
-    const primary = getPrimaryIntegration();
-
-    if (!primary) {
-      // Use local SQLite
-      if (!appDb || !appDb.getSystemLogs) {
-        console.log('WARNING: No appDb or getSystemLogs method available');
-        return res.json([]);
-      }
-      const logs = appDb.getSystemLogs(100);
-      console.log(`Returning ${logs.length} system logs from local database`);
-      return res.json(logs);
+    // Always use local SQLite database for system logs
+    if (!appDb || !appDb.getSystemLogs) {
+      console.log('WARNING: No appDb or getSystemLogs method available');
+      return res.json([]);
     }
 
-    // Use primary database integration
-    const { IntegrationDB } = await import('./database/IntegrationDB.js');
-    const db = new IntegrationDB(primary);
-
-    try {
-      const logs = await db.getSystemLogs(100);
-      await db.disconnect();
-      res.json(logs);
-    } catch (error) {
-      await db.disconnect();
-      throw error;
-    }
+    const logs = appDb.getSystemLogs(100);
+    console.log(`Returning ${logs.length} system logs from local database`);
+    res.json(logs);
   } catch (error) {
     console.error('Error fetching system logs:', error);
     res.status(500).json({ error: error.message });

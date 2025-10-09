@@ -182,6 +182,20 @@ export default function Integrations() {
       const environmentsStr = localStorage.getItem('environments');
       const environments = environmentsStr ? JSON.parse(environmentsStr) : [];
 
+      console.log('Attempting to delete integration:', id);
+      console.log('Checking against environments:', environments);
+
+      // Check if integration is used in any environment (client-side validation)
+      const usedInEnvironments = environments.filter((env: any) => {
+        const integrations = env.integrations || {};
+        return Object.values(integrations).includes(id);
+      });
+
+      if (usedInEnvironments.length > 0) {
+        const envNames = usedInEnvironments.map((env: any) => env.name).join(', ');
+        throw new Error(`Cannot delete integration. It is currently used in the following environments: ${envNames}. Please remove it from these environments first.`);
+      }
+
       const response = await fetch(`/api/integrations/${id}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' },
