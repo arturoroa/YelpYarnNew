@@ -91,6 +91,17 @@ export class DefaultRecorderDB {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS user_sessions (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL,
+        loginTime TEXT NOT NULL,
+        logoutTime TEXT,
+        ipAddress TEXT,
+        status TEXT DEFAULT 'active',
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
     `);
 
     this.insertDefaultSystemUser();
