@@ -31,6 +31,15 @@ export class DefaultRecorderDB {
 
   initializeTables() {
     this.db.exec(`
+      CREATE TABLE IF NOT EXISTS system_users (
+        id TEXT PRIMARY KEY,
+        username TEXT NOT NULL UNIQUE,
+        password TEXT NOT NULL,
+        type TEXT NOT NULL,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+      );
+
       CREATE TABLE IF NOT EXISTS integrations (
         id TEXT PRIMARY KEY,
         name TEXT NOT NULL,
@@ -75,7 +84,22 @@ export class DefaultRecorderDB {
       );
     `);
 
+    this.insertDefaultSystemUser();
     this.insertSampleUsers();
+  }
+
+  insertDefaultSystemUser() {
+    const existingUsers = this.db.prepare('SELECT COUNT(*) as count FROM system_users').get();
+
+    if (existingUsers.count === 0) {
+      const stmt = this.db.prepare(`
+        INSERT INTO system_users (id, username, password, type)
+        VALUES (?, ?, ?, ?)
+      `);
+
+      stmt.run(randomUUID(), 'aroa', '123456789', 'systemadmin');
+      console.log('✓ Default system admin user created (aroa)');
+    }
   }
 
   insertSampleUsers() {
@@ -400,6 +424,27 @@ export class DefaultRecorderDB {
       yelp_users: this.getYelpUsers(),
       system_logs: this.getSystemLogs(1000)
     };
+  }
+
+  verifySystemUser(username, password) {
+    const stmt = this.db.prepare('SELECT * FROM system_users WHERE username = ? AND password = ?');
+    const user = stmt.get(username, password);
+    return user || null;
+  }
+
+  getAllSystemUsers() {
+    const stmt = this.db.prepare('SELECT id, username, type, created_at, updated_at FROM system_users');
+    return stmt.all();
+  }
+
+  createSystemUser(username, password, type = 'user') {
+    const id = randomUUID();
+    const stmt = this.db.prepare(`
+      INSERT INTO system_users (id, username, password, type)
+      VALUES (?, ?, ?, ?)
+    `);
+    stmt.run(id, username, password, type);
+    return { id, username, type };
   }
 
   close() {

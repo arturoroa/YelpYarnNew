@@ -156,6 +156,74 @@ app.get('/api/status', (req, res) => {
   res.json({ status: 'ok', timestamp: new Date().toISOString() });
 });
 
+// Authentication endpoints
+app.post('/api/auth/login', async (req, res) => {
+  try {
+    const { username, password } = req.body;
+
+    if (!username || !password) {
+      return res.status(400).json({ error: 'Username and password are required' });
+    }
+
+    if (!appDb || !appDb.verifySystemUser) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const user = appDb.verifySystemUser(username, password);
+
+    if (!user) {
+      return res.status(401).json({ error: 'Invalid username or password' });
+    }
+
+    await logSystemAction(user.id, 'system_user_login', {
+      username: user.username,
+      user_type: user.type
+    });
+
+    res.json({
+      success: true,
+      user: {
+        id: user.id,
+        username: user.username,
+        type: user.type
+      }
+    });
+  } catch (error) {
+    console.error('Error during login:', error);
+    res.status(500).json({ error: 'Login failed' });
+  }
+});
+
+app.post('/api/auth/logout', async (req, res) => {
+  try {
+    const { username, sessionId } = req.body;
+
+    await logSystemAction(null, 'system_user_logout', {
+      username,
+      session_id: sessionId
+    });
+
+    res.json({ success: true });
+  } catch (error) {
+    console.error('Error during logout:', error);
+    res.status(500).json({ error: 'Logout failed' });
+  }
+});
+
+app.get('/api/system-users', async (req, res) => {
+  try {
+    if (!appDb || !appDb.getAllSystemUsers) {
+      return res.status(500).json({ error: 'Database not initialized' });
+    }
+
+    const users = appDb.getAllSystemUsers();
+    res.json(users);
+  } catch (error) {
+    console.error('Error fetching system users:', error);
+    res.status(500).json({ error: 'Failed to fetch users' });
+  }
+});
+
 // Get primary database integration (first connected database from local SQLite)
 function getPrimaryIntegration() {
   if (!appDb || !appDb.getAllIntegrations) {

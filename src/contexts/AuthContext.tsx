@@ -61,60 +61,59 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   };
 
   const login = async (username: string, password: string): Promise<boolean> => {
-    if (username === 'aroa' && password === '123456789') {
-      const ipAddress = getIpAddress();
-      const sessionId = generateSessionId();
-      const loginTime = new Date().toISOString();
+    try {
+      const response = await fetch('/api/auth/login', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ username, password })
+      });
 
-      const authUser: AuthUser = {
-        username,
-        loginTime,
-        ipAddress,
-        sessionId
-      };
-
-      const newSession: AuthSession = {
-        id: sessionId,
-        username,
-        loginTime,
-        ipAddress,
-        status: 'active'
-      };
-
-      // Actualizar usuario y sesión
-      setUser(authUser);
-      setIsAuthenticated(true);
-
-      // Añadir a historial
-      const updatedHistory = [...sessionHistory, newSession];
-      setSessionHistory(updatedHistory);
-
-      // Guardar en localStorage
-      localStorage.setItem('authUser', JSON.stringify(authUser));
-      localStorage.setItem('sessionHistory', JSON.stringify(updatedHistory));
-
-      // Log system action
-      try {
-        await fetch('/api/system-logs', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            action: 'system_user_login',
-            details: {
-              username,
-              session_id: sessionId,
-              ip_address: ipAddress,
-              login_time: loginTime
-            }
-          })
-        });
-      } catch (error) {
-        console.error('Failed to log login action:', error);
+      if (!response.ok) {
+        return false;
       }
 
-      return true;
+      const result = await response.json();
+
+      if (result.success && result.user) {
+        const ipAddress = getIpAddress();
+        const sessionId = generateSessionId();
+        const loginTime = new Date().toISOString();
+
+        const authUser: AuthUser = {
+          username: result.user.username,
+          loginTime,
+          ipAddress,
+          sessionId
+        };
+
+        const newSession: AuthSession = {
+          id: sessionId,
+          username: result.user.username,
+          loginTime,
+          ipAddress,
+          status: 'active'
+        };
+
+        // Actualizar usuario y sesión
+        setUser(authUser);
+        setIsAuthenticated(true);
+
+        // Añadir a historial
+        const updatedHistory = [...sessionHistory, newSession];
+        setSessionHistory(updatedHistory);
+
+        // Guardar en localStorage
+        localStorage.setItem('authUser', JSON.stringify(authUser));
+        localStorage.setItem('sessionHistory', JSON.stringify(updatedHistory));
+
+        return true;
+      }
+
+      return false;
+    } catch (error) {
+      console.error('Login error:', error);
+      return false;
     }
-    return false;
   };
 
   const logout = () => {
@@ -131,17 +130,13 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       setSessionHistory(updatedHistory);
       localStorage.setItem('sessionHistory', JSON.stringify(updatedHistory));
 
-      // Log system action
-      fetch('/api/system-logs', {
+      // Log system action via backend
+      fetch('/api/auth/logout', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          action: 'system_user_logout',
-          details: {
-            username: user.username,
-            session_id: user.sessionId,
-            logout_time: logoutTime
-          }
+          username: user.username,
+          sessionId: user.sessionId
         })
       }).catch(error => {
         console.error('Failed to log logout action:', error);
