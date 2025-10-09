@@ -569,6 +569,72 @@ app.post('/api/integrations/:id/setup-schema', async (req, res) => {
   }
 });
 
+// Endpoint to migrate data from integration DB back to defaultRecorder.db
+app.post('/api/integrations/:id/migrate-to-default', async (req, res) => {
+  try {
+    const { id } = req.params;
+    const integrations = appDb.getIntegrations ? appDb.getIntegrations() : appDb.getAllIntegrations();
+    const integration = integrations.find(i => i.id === id);
+
+    if (!integration) {
+      return res.status(404).json({ error: 'Integration not found' });
+    }
+
+    if (integration.type !== 'database') {
+      return res.status(400).json({ error: 'Only database integrations can be migrated' });
+    }
+
+    console.log(`Migrating data from integration ${integration.name} to defaultRecorder.db...`);
+
+    // Import required classes
+    const { IntegrationDB } = await import('./database/IntegrationDB.js');
+    const { DataMigrator } = await import('./database/DataMigrator.js');
+
+    // Connect to the integration database
+    const integrationDb = new IntegrationDB(integration);
+    await integrationDb.connect();
+
+    // Export all data from integration DB
+    const exportedData = await integrationDb.exportAllData();
+    console.log('Data exported:', {
+      integrations: exportedData.integrations.length,
+      test_sessions: exportedData.test_sessions.length,
+      yelp_users: exportedData.yelp_users.length,
+      system_logs: exportedData.system_logs.length
+    });
+
+    // Migrate to defaultRecorder.db (SQLite)
+    const migrator = new DataMigrator({ exportAllData: () => exportedData });
+    const result = await migrator.migrateToSQLite(appDb);
+
+    // Disconnect from integration DB
+    await integrationDb.disconnect();
+
+    console.log('Migration completed successfully:', result);
+
+    await logSystemAction(null, 'integration_data_migrated', {
+      integration_id: id,
+      integration_name: integration.name,
+      migrated: result.migrated
+    });
+
+    res.json({
+      success: true,
+      message: 'Data migrated successfully to defaultRecorder.db',
+      migrated: result.migrated
+    });
+  } catch (error) {
+    console.error('Error migrating data:', error);
+
+    await logSystemAction(null, 'integration_data_migration_failed', {
+      integration_id: req.params.id,
+      error: error.message
+    });
+
+    res.status(500).json({ error: error.message });
+  }
+});
+
 // Endpoint para probar conexiones de integración
 app.post('/api/integrations/test-connection', async (req, res) => {
   console.log('Testing connection for integration:', req.body.type);

@@ -300,4 +300,75 @@ export class IntegrationDB {
       throw new Error(`Failed to get system logs: ${error.message}`);
     }
   }
+
+  async getTestSessions() {
+    if (!this.connection) await this.connect();
+
+    try {
+      let rows;
+      if (this.dbType === 'sqlite') {
+        const stmt = this.connection.prepare('SELECT * FROM test_sessions ORDER BY created_at DESC');
+        rows = stmt.all();
+      } else if (this.dbType === 'postgresql') {
+        const result = await this.connection.query('SELECT * FROM test_sessions ORDER BY created_at DESC');
+        rows = result.rows;
+      } else if (this.dbType === 'mysql') {
+        const [results] = await this.connection.query('SELECT * FROM test_sessions ORDER BY created_at DESC');
+        rows = results;
+      }
+
+      return rows.map(row => ({
+        ...row,
+        results: typeof row.results === 'string' ? JSON.parse(row.results) : row.results,
+        logs: typeof row.logs === 'string' ? JSON.parse(row.logs) : row.logs
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get test sessions: ${error.message}`);
+    }
+  }
+
+  async getYelpUsers() {
+    if (!this.connection) await this.connect();
+
+    try {
+      let rows;
+      if (this.dbType === 'sqlite') {
+        const stmt = this.connection.prepare('SELECT * FROM yelp_users ORDER BY created_at DESC');
+        rows = stmt.all();
+      } else if (this.dbType === 'postgresql') {
+        const result = await this.connection.query('SELECT * FROM yelp_users ORDER BY created_at DESC');
+        rows = result.rows;
+      } else if (this.dbType === 'mysql') {
+        const [results] = await this.connection.query('SELECT * FROM yelp_users ORDER BY created_at DESC');
+        rows = results;
+      }
+
+      return rows.map(row => ({
+        ...row,
+        config: typeof row.config === 'string' ? JSON.parse(row.config) : row.config
+      }));
+    } catch (error) {
+      throw new Error(`Failed to get yelp users: ${error.message}`);
+    }
+  }
+
+  async exportAllData() {
+    if (!this.connection) await this.connect();
+
+    try {
+      const integrations = await this.getAllIntegrations();
+      const testSessions = await this.getTestSessions();
+      const yelpUsers = await this.getYelpUsers();
+      const systemLogs = await this.getSystemLogs(1000);
+
+      return {
+        integrations,
+        test_sessions: testSessions,
+        yelp_users: yelpUsers,
+        system_logs: systemLogs
+      };
+    } catch (error) {
+      throw new Error(`Failed to export data: ${error.message}`);
+    }
+  }
 }

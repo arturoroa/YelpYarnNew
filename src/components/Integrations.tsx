@@ -176,6 +176,9 @@ export default function Integrations() {
     }
   };
 
+  const [migrationModal, setMigrationModal] = useState<{ show: boolean; integrationId: string; integrationName: string; inUse: boolean } | null>(null);
+  const [isMigrating, setIsMigrating] = useState(false);
+
   const handleDeleteIntegration = async (id: string) => {
     try {
       // Get environments from localStorage to check usage
@@ -186,6 +189,12 @@ export default function Integrations() {
       console.log('Attempting to delete integration ID:', id);
       console.log('Type of ID:', typeof id);
       console.log('All environments from localStorage:', JSON.stringify(environments, null, 2));
+
+      // Find the integration to check its type
+      const integration = integrations.find(i => i.id === id);
+      if (!integration) {
+        throw new Error('Integration not found');
+      }
 
       // Check if integration is used in any environment (client-side validation)
       const usedInEnvironments = environments.filter((env: any) => {
@@ -213,11 +222,24 @@ export default function Integrations() {
 
       console.log('Environments using this integration:', usedInEnvironments);
 
+      // If integration is in use and is a database, show migration modal
       if (usedInEnvironments.length > 0) {
-        const envNames = usedInEnvironments.map((env: any) => env.name).join(', ');
-        const errorMsg = `Cannot delete integration. It is currently used in the following environments: ${envNames}. Please remove it from these environments first.`;
-        console.error(errorMsg);
-        throw new Error(errorMsg);
+        if (integration.type === 'database') {
+          const envNames = usedInEnvironments.map((env: any) => env.name).join(', ');
+          setMigrationModal({
+            show: true,
+            integrationId: id,
+            integrationName: integration.name,
+            inUse: true
+          });
+          return;
+        } else {
+          // Non-database integrations cannot be deleted if in use
+          const envNames = usedInEnvironments.map((env: any) => env.name).join(', ');
+          const errorMsg = `Cannot delete integration. It is currently used in the following environments: ${envNames}. Please remove it from these environments first.`;
+          console.error(errorMsg);
+          throw new Error(errorMsg);
+        }
       }
 
       console.log('Integration not in use, proceeding with deletion...');
@@ -238,6 +260,53 @@ export default function Integrations() {
     } catch (error) {
       console.error('Error deleting integration:', error);
       showToast(error instanceof Error ? error.message : 'Failed to delete integration', 'error');
+    }
+  };
+
+  const handleMigrateAndDelete = async () => {
+    if (!migrationModal) return;
+
+    setIsMigrating(true);
+    try {
+      // Step 1: Migrate data back to defaultRecorder.db
+      console.log(`Migrating data from integration ${migrationModal.integrationId}...`);
+      const migrateResponse = await fetch(`/api/integrations/${migrationModal.integrationId}/migrate-to-default`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' }
+      });
+
+      if (!migrateResponse.ok) {
+        const error = await migrateResponse.json();
+        throw new Error(error.error || 'Failed to migrate data');
+      }
+
+      const migrateResult = await migrateResponse.json();
+      console.log('Migration successful:', migrateResult);
+      showToast(`Data migrated: ${JSON.stringify(migrateResult.migrated)}`, 'success');
+
+      // Step 2: Now delete the integration
+      const environmentsStr = localStorage.getItem('environments');
+      const environments = environmentsStr ? JSON.parse(environmentsStr) : [];
+
+      const deleteResponse = await fetch(`/api/integrations/${migrationModal.integrationId}`, {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ environments })
+      });
+
+      if (!deleteResponse.ok) {
+        const error = await deleteResponse.json();
+        throw new Error(error.error || 'Failed to delete integration');
+      }
+
+      await fetchIntegrations();
+      showToast('Integration deleted successfully after data migration', 'success');
+      setMigrationModal(null);
+    } catch (error) {
+      console.error('Error migrating and deleting:', error);
+      showToast(error instanceof Error ? error.message : 'Failed to migrate and delete integration', 'error');
+    } finally {
+      setIsMigrating(false);
     }
   };
 
@@ -1142,6 +1211,68 @@ export default function Integrations() {
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
               >
                 Add Integration
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {migrationModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-gray-900">Data Migration Required</h2>
+
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                The integration <strong>{migrationModal.integrationName}</strong> is currently in use by one or more environments.
+              </p>
+
+              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
+                <div className="flex">
+                  <AlertTriangle className="h-5 w-5 text-yellow-400 mr-2" />
+                  <div>
+                    <p className="text-sm text-yellow-700">
+                      <strong>Important:</strong> Before deletion, all data from this database integration will be migrated back to defaultRecorder.db to preserve your data.
+                    </p>
+                  </div>
+                </div>
+              </div>
+
+              <p className="text-sm text-gray-600 mb-2">
+                This will:
+              </p>
+              <ul className="list-disc list-inside text-sm text-gray-600 mb-4 space-y-1">
+                <li>Export all data (integrations, test sessions, users, logs)</li>
+                <li>Migrate data to defaultRecorder.db</li>
+                <li>Delete the integration after successful migration</li>
+              </ul>
+
+              <p className="text-sm text-gray-700 font-medium">
+                Do you want to proceed with the migration and deletion?
+              </p>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setMigrationModal(null)}
+                disabled={isMigrating}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={handleMigrateAndDelete}
+                disabled={isMigrating}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center"
+              >
+                {isMigrating ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Migrating...
+                  </>
+                ) : (
+                  'Migrate & Delete'
+                )}
               </button>
             </div>
           </div>
