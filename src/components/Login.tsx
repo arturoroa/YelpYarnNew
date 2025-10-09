@@ -17,7 +17,7 @@ const Login: React.FC = () => {
     try {
       const success = await login(username, password);
       if (!success) {
-        setError("Usuario o contraseña incorrectos");
+        setError("Incorrect User/Password");
       }
     } catch (error) {
       setError("Error al iniciar sesión");
@@ -38,8 +38,8 @@ const Login: React.FC = () => {
         
         <div className="bg-white rounded-xl shadow-sm border border-gray-200 p-8">
           <div className="text-center mb-8">
-            <h2 className="text-2xl font-bold text-gray-900">Iniciar sesión</h2>
-            <p className="text-gray-600 mt-1">Acceda a la plataforma de pruebas de Yelp</p>
+            <h2 className="text-2xl font-bold text-gray-900">Login</h2>
+            <p className="text-gray-600 mt-1">Login into Yelp platform</p>
           </div>
           
           {error && (
@@ -53,7 +53,7 @@ const Login: React.FC = () => {
           <form onSubmit={handleSubmit}>
             <div className="mb-5">
               <label htmlFor="username" className="block text-sm font-medium text-gray-700 mb-1">
-                Usuario
+                User
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -73,7 +73,7 @@ const Login: React.FC = () => {
             
             <div className="mb-6">
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 mb-1">
-                Contraseña
+                Password
               </label>
               <div className="relative">
                 <div className="absolute inset-y-0 left-0 pl-3 flex items-center pointer-events-none">
@@ -99,17 +99,17 @@ const Login: React.FC = () => {
               {loading ? (
                 <>
                   <div className="mr-2 animate-spin rounded-full h-4 w-4 border-2 border-white border-t-transparent"></div>
-                  Iniciando sesión...
+                  Logging in...
                 </>
               ) : (
-                'Iniciar sesión'
+                'Login'
               )}
             </button>
           </form>
           
           <div className="mt-6 text-sm text-center text-gray-500 border-t border-gray-200 pt-4">
-            <p>Para este demo use: <span className="font-semibold">aroa</span> / <span className="font-semibold">123456789</span></p>
-            <p className="mt-2">Esta plataforma es para validación SOX y pruebas de Yelp Ad Revenue</p>
+            <p>Please insert your user and password</p>
+            <p className="mt-2">This platform was designed as a POC on Yelp Ad Revenue</p>
           </div>
         </div>
       </div>
