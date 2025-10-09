@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw } from 'lucide-react';
+import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, AlertTriangle } from 'lucide-react';
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -186,7 +186,8 @@ export default function Integrations() {
 
       const integration = integrations.find(i => i.id === id);
       if (!integration) {
-        throw new Error('Integration not found');
+        showToast('Integration not found', 'error');
+        return;
       }
 
       console.log('Attempting to delete integration...');
@@ -197,9 +198,14 @@ export default function Integrations() {
       });
 
       if (!response.ok) {
-        const errorData = await response.json();
+        let errorData;
+        try {
+          errorData = await response.json();
+        } catch (e) {
+          throw new Error('Failed to delete integration');
+        }
 
-        if (response.status === 400 && errorData.environmentNames) {
+        if (response.status === 400) {
           if (integration.type === 'database') {
             setMigrationModal({
               show: true,
@@ -207,8 +213,12 @@ export default function Integrations() {
               integrationName: integration.name,
               inUse: true
             });
+            showToast(errorData.error || 'Integration is in use', 'error');
             return;
           }
+
+          showToast(errorData.error || 'Cannot delete integration that is in use', 'error');
+          return;
         }
 
         throw new Error(errorData.error || 'Failed to delete integration');
