@@ -188,13 +188,29 @@ export default function Integrations() {
       // Check if integration is used in any environment (client-side validation)
       const usedInEnvironments = environments.filter((env: any) => {
         const integrations = env.integrations || {};
-        return Object.values(integrations).includes(id);
+        const integrationValues = Object.values(integrations);
+        const isUsed = integrationValues.includes(id);
+
+        console.log(`Environment "${env.name}":`, {
+          integrations,
+          integrationValues,
+          isUsed,
+          lookingFor: id
+        });
+
+        return isUsed;
       });
+
+      console.log('Environments using this integration:', usedInEnvironments);
 
       if (usedInEnvironments.length > 0) {
         const envNames = usedInEnvironments.map((env: any) => env.name).join(', ');
-        throw new Error(`Cannot delete integration. It is currently used in the following environments: ${envNames}. Please remove it from these environments first.`);
+        const errorMsg = `Cannot delete integration. It is currently used in the following environments: ${envNames}. Please remove it from these environments first.`;
+        console.error(errorMsg);
+        throw new Error(errorMsg);
       }
+
+      console.log('Integration not in use, proceeding with deletion...');
 
       const response = await fetch(`/api/integrations/${id}`, {
         method: 'DELETE',

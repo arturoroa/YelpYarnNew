@@ -73,6 +73,13 @@ export default function EnvironmentSelector({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Save environments to localStorage whenever they change
+  useEffect(() => {
+    if (environments.length >= 0) {
+      localStorage.setItem('environments', JSON.stringify(environments));
+    }
+  }, [environments]);
+
   const fetchIntegrations = async () => {
     try {
       const response = await fetch('/api/integrations');
@@ -101,59 +108,27 @@ export default function EnvironmentSelector({
   };
 
   const loadEnvironments = () => {
-    // Mock data (replace with API)
-    const mockEnvironments: Environment[] = [
-      {
-        id: 'prod',
-        name: 'Production',
-        type: 'production',
-        description: 'Live Yelp production environment',
-        endpoints: {
-          yelpBaseUrl: 'https://www.yelp.com',
-          yelpMobileUrl: 'https://m.yelp.com',
-          yelpAppUrl: 'yelp://',
-          apiBaseUrl: 'https://api.yelp.com/v3',
-          searchApiUrl: 'https://api.yelp.com/v3/businesses/search',
-          gqlEndpoint: 'https://www.yelp.com/gql',
-          adEventLogUrl: 'https://analytics.yelp.com/unified_ad_event_log',
-        },
-        credentials: {
-          apiKey: 'prod_api_key_***',
-          clientId: 'prod_client_id',
-          clientSecret: 'prod_secret_***',
-        },
-        isActive: true,
-      },
-      {
-        id: 'test',
-        name: 'Test Environment',
-        type: 'test',
-        description: 'Yelp testing and staging environment',
-        endpoints: {
-          yelpBaseUrl: 'https://test.yelp.com',
-          yelpMobileUrl: 'https://m-test.yelp.com',
-          yelpAppUrl: 'yelp-test://',
-          apiBaseUrl: 'https://api-test.yelp.com/v3',
-          searchApiUrl: 'https://api-test.yelp.com/v3/businesses/search',
-          gqlEndpoint: 'https://test.yelp.com/gql',
-          adEventLogUrl: 'https://analytics-test.yelp.com/unified_ad_event_log',
-        },
-        credentials: {
-          apiKey: 'test_api_key_***',
-          clientId: 'test_client_id',
-          clientSecret: 'test_secret_***',
-        },
-        isActive: false,
-      },
-    ];
+    // Load from localStorage
+    const storedEnvironments = localStorage.getItem('environments');
 
-    setEnvironments(mockEnvironments);
+    if (storedEnvironments) {
+      try {
+        const parsedEnvironments = JSON.parse(storedEnvironments);
+        setEnvironments(parsedEnvironments);
 
-    // Set default selected environment if none selected yet
-    if (!selectedEnvironment && mockEnvironments.length > 0) {
-      const activeEnv = mockEnvironments.find((env) => env.isActive) || mockEnvironments[0];
-      onEnvironmentChange(activeEnv);
+        // Set default selected environment if none selected yet
+        if (!selectedEnvironment && parsedEnvironments.length > 0) {
+          const activeEnv = parsedEnvironments.find((env: Environment) => env.isActive) || parsedEnvironments[0];
+          onEnvironmentChange(activeEnv);
+        }
+        return;
+      } catch (error) {
+        console.error('Failed to load environments from localStorage:', error);
+      }
     }
+
+    // If no stored environments, start with empty array
+    setEnvironments([]);
   };
 
   const handleAddEnvironment = () => {
@@ -164,6 +139,7 @@ export default function EnvironmentSelector({
       description: '',
       endpoints: emptyEndpoints(),
       credentials: emptyCredentials(),
+      integrations: {},
       isActive: false,
     });
     setShowModal(true);
@@ -176,6 +152,7 @@ export default function EnvironmentSelector({
       ...environment,
       endpoints: { ...environment.endpoints },
       credentials: environment.credentials ? { ...environment.credentials } : undefined,
+      integrations: environment.integrations || {},
     });
     setShowModal(true);
   };
@@ -516,15 +493,18 @@ export default function EnvironmentSelector({
                     </label>
                     <select
                       value={formData.integrations?.database || ''}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newIntegrations = { ...(formData.integrations || {}) };
+                        if (e.target.value) {
+                          newIntegrations.database = e.target.value;
+                        } else {
+                          delete newIntegrations.database;
+                        }
                         setFormData((prev) => ({
                           ...prev,
-                          integrations: {
-                            ...(prev.integrations || {}),
-                            database: e.target.value || undefined,
-                          },
-                        }))
-                      }
+                          integrations: newIntegrations,
+                        }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">-- None --</option>
@@ -545,15 +525,18 @@ export default function EnvironmentSelector({
                     </label>
                     <select
                       value={formData.integrations?.proxy || ''}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newIntegrations = { ...(formData.integrations || {}) };
+                        if (e.target.value) {
+                          newIntegrations.proxy = e.target.value;
+                        } else {
+                          delete newIntegrations.proxy;
+                        }
                         setFormData((prev) => ({
                           ...prev,
-                          integrations: {
-                            ...(prev.integrations || {}),
-                            proxy: e.target.value || undefined,
-                          },
-                        }))
-                      }
+                          integrations: newIntegrations,
+                        }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">-- None --</option>
@@ -574,15 +557,18 @@ export default function EnvironmentSelector({
                     </label>
                     <select
                       value={formData.integrations?.vpn || ''}
-                      onChange={(e) =>
+                      onChange={(e) => {
+                        const newIntegrations = { ...(formData.integrations || {}) };
+                        if (e.target.value) {
+                          newIntegrations.vpn = e.target.value;
+                        } else {
+                          delete newIntegrations.vpn;
+                        }
                         setFormData((prev) => ({
                           ...prev,
-                          integrations: {
-                            ...(prev.integrations || {}),
-                            vpn: e.target.value || undefined,
-                          },
-                        }))
-                      }
+                          integrations: newIntegrations,
+                        }));
+                      }}
                       className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-blue-500"
                     >
                       <option value="">-- None --</option>
