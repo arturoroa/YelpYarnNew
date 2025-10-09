@@ -237,8 +237,13 @@ export default function Integrations() {
       if (result.migrated) {
         showToast(`Integration deleted successfully. Data migrated: ${JSON.stringify(result.migrated)}`, 'success');
       } else {
-        showToast('Integration deleted successfully', 'success');
+        showToast('Integration deleted successfully. All data has been cleared.', 'success');
       }
+
+      // Force a full page reload to ensure all components refresh with cleared data
+      setTimeout(() => {
+        window.location.reload();
+      }, 1500);
     } catch (error) {
       console.error('Error deleting integration:', error);
       showToast(error instanceof Error ? error.message : 'Failed to delete integration', 'error');

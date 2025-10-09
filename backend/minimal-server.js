@@ -634,7 +634,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
         await logSystemAction(null, 'integration_data_cleared', {
           integration_id: id,
           integration_name: integration.name,
-          note: 'All data cleared except user aroa'
+          note: 'All data cleared from integration database except user aroa'
         });
       } catch (clearError) {
         console.error('Error clearing data from integration database:', clearError);
@@ -642,6 +642,37 @@ app.delete('/api/integrations/:id', async (req, res) => {
           integration_id: id,
           integration_name: integration.name,
           error: clearError.message
+        });
+      }
+
+      // IMPORTANT: Also clear data from defaultRecorder.db (appDb)
+      // since the app will switch back to using it after integration deletion
+      console.log('Clearing data from defaultRecorder.db (appDb)...');
+      try {
+        // Clear test sessions
+        if (appDb.db) {
+          const clearSessionsStmt = appDb.db.prepare('DELETE FROM test_sessions');
+          clearSessionsStmt.run();
+          console.log('Cleared test_sessions from appDb');
+
+          // Clear system logs (except the current deletion log)
+          const clearLogsStmt = appDb.db.prepare("DELETE FROM system_logs WHERE action != 'integration_data_cleared'");
+          clearLogsStmt.run();
+          console.log('Cleared system_logs from appDb');
+
+          // Clear yelp_users except 'aroa'
+          const clearUsersStmt = appDb.db.prepare("DELETE FROM yelp_users WHERE username != 'aroa'");
+          clearUsersStmt.run();
+          console.log('Cleared yelp_users from appDb (kept user aroa)');
+        }
+
+        await logSystemAction(null, 'appdb_data_cleared', {
+          note: 'Cleared all data from defaultRecorder.db except user aroa'
+        });
+      } catch (appDbClearError) {
+        console.error('Error clearing data from appDb:', appDbClearError);
+        await logSystemAction(null, 'appdb_data_clear_failed', {
+          error: appDbClearError.message
         });
       }
     }
