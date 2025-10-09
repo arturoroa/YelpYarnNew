@@ -33,19 +33,23 @@ let appDb = null;
 try {
   const { DefaultRecorderDB } = await import('./database/DefaultRecorderDB.js');
   appDb = new DefaultRecorderDB();
+  console.log('✓ DefaultRecorderDB initialized successfully');
 } catch (error) {
-  console.log('! Failed to initialize DefaultRecorderDB, falling back to in-memory');
+  console.error('! Failed to initialize DefaultRecorderDB:', error.message);
+  console.log('! Falling back to in-memory database');
   appDb = new AppDatabase();
 }
 
 // Using local SQLite database only
-console.log('✓ Using DefaultRecorderDB for all data storage');
+console.log('✓ Database ready for use');
 
 // Helper function to log actions to local DB
 async function logSystemAction(userId, action, details = {}) {
   try {
     if (appDb && typeof appDb.logSystemAction === 'function') {
       appDb.logSystemAction(userId, action, details);
+    } else {
+      console.log('Cannot log: appDb or logSystemAction not available');
     }
   } catch (error) {
     console.error('Failed to log to local database:', error);
@@ -1399,9 +1403,11 @@ app.get('/api/system-logs', async (req, res) => {
     if (!primary) {
       // Use local SQLite
       if (!appDb || !appDb.getSystemLogs) {
+        console.log('WARNING: No appDb or getSystemLogs method available');
         return res.json([]);
       }
       const logs = appDb.getSystemLogs(100);
+      console.log(`Returning ${logs.length} system logs from local database`);
       return res.json(logs);
     }
 

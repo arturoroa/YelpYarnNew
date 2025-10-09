@@ -192,6 +192,23 @@ export class AppDatabase {
     return updated;
   }
 
+  // System logs (in-memory)
+  logSystemAction(userId, action, details = {}) {
+    console.log(`[IN-MEMORY] System log: ${action}`, details);
+    // In-memory storage doesn't persist logs
+  }
+
+  getSystemLogs(limit = 100) {
+    console.log('[IN-MEMORY] System logs not persisted in memory');
+    return [];
+  }
+
+  // System user verification (in-memory fallback)
+  verifySystemUser(username, password) {
+    console.log('[IN-MEMORY] System user verification not supported');
+    return null;
+  }
+
   close() {
     // No-op for in-memory database
   }

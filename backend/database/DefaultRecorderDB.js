@@ -395,20 +395,25 @@ export class DefaultRecorderDB {
   }
 
   logSystemAction(userId, action, details = {}) {
-    const id = randomUUID();
-    const now = new Date().toISOString();
+    try {
+      const id = randomUUID();
+      const now = new Date().toISOString();
 
-    this.db.prepare(`
-      INSERT INTO system_logs (id, user_id, action, details, timestamp, created_at)
-      VALUES (?, ?, ?, ?, ?, ?)
-    `).run(
-      id,
-      userId || null,
-      action,
-      JSON.stringify(details),
-      now,
-      now
-    );
+      this.db.prepare(`
+        INSERT INTO system_logs (id, user_id, action, details, timestamp, created_at)
+        VALUES (?, ?, ?, ?, ?, ?)
+      `).run(
+        id,
+        userId || null,
+        action,
+        JSON.stringify(details),
+        now,
+        now
+      );
+      console.log(`✓ System log written: ${action}`);
+    } catch (error) {
+      console.error('Error writing system log:', error);
+    }
   }
 
   getSystemLogs(limit = 100) {
