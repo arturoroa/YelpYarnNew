@@ -1544,7 +1544,15 @@ app.post('/api/tests/stop/:sessionId', async (req, res) => {
 // User endpoints
 app.get('/api/users', async (req, res) => {
   try {
-    const users = appDb.getAllUsers();
+    const { type } = req.query;
+
+    let users;
+    if (type) {
+      users = appDb.getUsersByType(type);
+    } else {
+      users = appDb.getAllUsers();
+    }
+
     res.json(users);
   } catch (error) {
     console.error('Error fetching users:', error);

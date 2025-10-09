@@ -236,30 +236,38 @@ const TestRunner: React.FC = () => {
 
   const loadUsers = async () => {
     try {
-      const response = await apiGet<GuvUser[]>('/users/list');
-      console.log('Users loaded:', response);
-      
+      const response = await apiGet<any[]>('/api/users?type=TestUser');
+      console.log('TestUsers loaded:', response);
+
       if (Array.isArray(response) && response.length > 0) {
-        setUsers(response);
+        const mappedUsers: GuvUser[] = response.map(user => ({
+          guv: user.id,
+          username: user.username,
+          email: user.email || '',
+          yelpUserId: user.id,
+          status: 'active' as 'active',
+          sessionCount: 0,
+          createdAt: user.creation_time
+        }));
+        setUsers(mappedUsers);
         return true;
       } else {
-        console.log('No users returned from API');
-        
-        // Usar datos de demostración
+        console.log('No TestUsers found in database');
+
         const demoUsers: GuvUser[] = [
           {
             guv: 'demo-guv-1',
-            username: 'demouser1',
-            email: 'demo1@example.com',
+            username: 'testuser',
+            email: 'test@example.com',
             status: 'active' as 'active',
-            sessionCount: 2,
+            sessionCount: 0,
             createdAt: new Date().toISOString()
           },
           {
             guv: 'demo-guv-2',
-            username: 'demouser2',
-            email: 'demo2@example.com',
-            status: 'pending' as 'pending',
+            username: 'john_doe',
+            email: 'john@example.com',
+            status: 'active' as 'active',
             sessionCount: 0,
             createdAt: new Date().toISOString()
           }
@@ -321,12 +329,30 @@ const TestRunner: React.FC = () => {
         return;
       }
 
-      // Create user
-      const createdUser = await apiPost<GuvUser>('/api/users/create', newUser);
-      
-      setUsers(prev => [...prev, createdUser]);
-      setSelectedUser(createdUser);
-      localStorage.setItem('selectedUser', JSON.stringify(createdUser)); // Guardar en localStorage
+      // Create user as TestUser type
+      const userData = {
+        username: newUser.username,
+        password: newUser.password,
+        email: newUser.email,
+        type_of_user: 'TestUser',
+        created_by: 'system'
+      };
+
+      const createdDbUser = await apiPost<any>('/api/users', userData);
+
+      const mappedUser: GuvUser = {
+        guv: createdDbUser.id,
+        username: createdDbUser.username,
+        email: createdDbUser.email || '',
+        yelpUserId: createdDbUser.id,
+        status: 'active',
+        sessionCount: 0,
+        createdAt: createdDbUser.creation_time
+      };
+
+      setUsers(prev => [...prev, mappedUser]);
+      setSelectedUser(mappedUser);
+      localStorage.setItem('selectedUser', JSON.stringify(mappedUser));
       setUserCreationStatus({ loading: false, error: null, success: true });
       setShowUserModal(false);
       setNewUser({ username: '', email: '', password: '', confirmPassword: '' });
