@@ -3,7 +3,7 @@
 Database Reset Script
 =====================
 This script deletes the existing defaultRecorder.db and creates a fresh one
-with only the aroa system admin user.
+with the unified users table and default users.
 
 Usage: python reset_database.py
 """
@@ -29,7 +29,7 @@ def delete_existing_database():
         print(f"ℹ No existing database found at: {DB_PATH}")
 
 def create_fresh_database():
-    """Create a fresh database with all tables and only the aroa user"""
+    """Create a fresh database with all tables and default users"""
 
     # Get current timestamp
     current_time = datetime.now().isoformat()
@@ -45,17 +45,17 @@ def create_fresh_database():
         print("Creating tables...")
 
         cursor.execute("""
-            CREATE TABLE system_users (
+            CREATE TABLE users (
                 id TEXT PRIMARY KEY,
                 username TEXT NOT NULL UNIQUE,
                 password TEXT NOT NULL,
-                type TEXT NOT NULL,
                 email TEXT,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+                created_by TEXT,
+                creation_time TEXT DEFAULT CURRENT_TIMESTAMP,
+                type_of_user TEXT NOT NULL DEFAULT 'TestUser'
             )
         """)
-        print("  ✓ system_users table created")
+        print("  ✓ users table created")
 
         cursor.execute("""
             CREATE TABLE integrations (
@@ -88,19 +88,6 @@ def create_fresh_database():
         print("  ✓ test_sessions table created")
 
         cursor.execute("""
-            CREATE TABLE yelp_users (
-                id TEXT PRIMARY KEY,
-                username TEXT NOT NULL UNIQUE,
-                email TEXT,
-                config TEXT DEFAULT '{}',
-                is_active INTEGER DEFAULT 1,
-                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
-                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
-            )
-        """)
-        print("  ✓ yelp_users table created")
-
-        cursor.execute("""
             CREATE TABLE system_logs (
                 id TEXT PRIMARY KEY,
                 user_id TEXT,
@@ -112,30 +99,87 @@ def create_fresh_database():
         """)
         print("  ✓ system_logs table created")
 
-        # Insert aroa user
-        print("\nInserting system admin user...")
-        user_id = str(uuid.uuid4())
+        cursor.execute("""
+            CREATE TABLE environments (
+                id TEXT PRIMARY KEY,
+                name TEXT NOT NULL UNIQUE,
+                integrations TEXT DEFAULT '{}',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("  ✓ environments table created")
 
         cursor.execute("""
-            INSERT INTO system_users (id, username, password, type, email, created_at, updated_at)
+            CREATE TABLE user_sessions (
+                id TEXT PRIMARY KEY,
+                username TEXT NOT NULL,
+                loginTime TEXT NOT NULL,
+                logoutTime TEXT,
+                ipAddress TEXT,
+                status TEXT DEFAULT 'active',
+                created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+                updated_at TEXT DEFAULT CURRENT_TIMESTAMP
+            )
+        """)
+        print("  ✓ user_sessions table created")
+
+        # Insert default users
+        print("\nInserting default users...")
+
+        # SystemUser: aroa
+        aroa_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO users (id, username, password, email, created_by, creation_time, type_of_user)
             VALUES (?, ?, ?, ?, ?, ?, ?)
         """, (
-            user_id,
+            aroa_id,
             'aroa',
             '123456789',
-            'systemadmin',
-            'aroa@soaprojects.com',
+            'aroa@example.com',
+            'system',
             current_time,
-            current_time
+            'SystemUser'
         ))
-
-        print(f"  ✓ User 'aroa' created")
-        print(f"    - ID: {user_id}")
+        print(f"  ✓ SystemUser 'aroa' created")
         print(f"    - Username: aroa")
         print(f"    - Password: 123456789")
-        print(f"    - Type: systemadmin")
-        print(f"    - Email: aroa@soaprojects.com")
-        print(f"    - Created: {current_time}")
+        print(f"    - Type: SystemUser (can create users)")
+
+        # TestUser: testuser
+        testuser_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO users (id, username, password, email, created_by, creation_time, type_of_user)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            testuser_id,
+            'testuser',
+            'testpass',
+            'test@example.com',
+            'system',
+            current_time,
+            'TestUser'
+        ))
+        print(f"  ✓ TestUser 'testuser' created")
+        print(f"    - Username: testuser")
+        print(f"    - Password: testpass")
+        print(f"    - Type: TestUser (cannot login)")
+
+        # TestUser: john_doe
+        john_id = str(uuid.uuid4())
+        cursor.execute("""
+            INSERT INTO users (id, username, password, email, created_by, creation_time, type_of_user)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+        """, (
+            john_id,
+            'john_doe',
+            'password123',
+            'john@example.com',
+            'system',
+            current_time,
+            'TestUser'
+        ))
+        print(f"  ✓ TestUser 'john_doe' created")
 
         # Log the database reset action
         log_id = str(uuid.uuid4())
@@ -144,9 +188,9 @@ def create_fresh_database():
             VALUES (?, ?, ?, ?, ?, ?)
         """, (
             log_id,
-            user_id,
+            aroa_id,
             'database_reset',
-            '{"description": "Database reset via Python script", "tables_created": 5, "initial_user": "aroa"}',
+            '{"description": "Database reset via Python script", "tables_created": 6, "users_created": 3}',
             current_time,
             current_time
         ))
@@ -162,8 +206,16 @@ def create_fresh_database():
         print("="*60)
         print(f"Database Path: {os.path.abspath(DB_PATH)}")
         print(f"Reset Time: {current_time}")
-        print(f"Tables Created: 5")
-        print(f"Initial User: aroa (systemadmin)")
+        print(f"Tables Created: 6")
+        print(f"Users Created: 3")
+        print("")
+        print("USER TYPES:")
+        print("  • SystemUser   - Can login & create users")
+        print("  • RegularUser  - Can login (Users tab hidden)")
+        print("  • TestUser     - Cannot login (for testing only)")
+        print("")
+        print("LOGIN CREDENTIALS:")
+        print("  • aroa / 123456789 (SystemUser)")
         print("="*60)
 
     except Exception as e:
@@ -186,13 +238,15 @@ def verify_database():
         tables = cursor.fetchall()
         print(f"  ✓ Found {len(tables)} tables: {[t[0] for t in tables]}")
 
-        # Check user
-        cursor.execute("SELECT username, email, type FROM system_users WHERE username='aroa'")
-        user = cursor.fetchone()
-        if user:
-            print(f"  ✓ User verified: {user[0]} ({user[2]}) - {user[1]}")
+        # Check users
+        cursor.execute("SELECT username, email, type_of_user FROM users ORDER BY type_of_user, username")
+        users = cursor.fetchall()
+        if users:
+            print(f"  ✓ Users verified ({len(users)} users):")
+            for user in users:
+                print(f"    - {user[0]} ({user[2]}) - {user[1]}")
         else:
-            print("  ✗ User not found!")
+            print("  ✗ No users found!")
 
         conn.close()
         return True
@@ -206,7 +260,7 @@ def main():
     print("DATABASE RESET SCRIPT")
     print("="*60)
     print("This will delete all existing data and create a fresh database")
-    print("with only the aroa system admin user.")
+    print("with the unified users table.")
     print("="*60)
 
     # Confirm action
