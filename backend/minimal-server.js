@@ -686,16 +686,16 @@ app.delete('/api/integrations/:id', async (req, res) => {
           // Restore user aroa in yelp_users with a fixed ID to ensure uniqueness
           appDb.db.prepare(`
             INSERT INTO yelp_users (id, username, email, config, is_active, created_at, updated_at)
-            VALUES (1, 'aroa', 'aroa@example.com', '{}', 1, datetime('now'), datetime('now'))
+            VALUES ('aroa-yelp-user', 'aroa', 'aroa@example.com', '{}', 1, datetime('now'), datetime('now'))
           `).run();
-          console.log('  ✓ Restored yelp user: aroa (id=1)');
+          console.log('  ✓ Restored yelp user: aroa (id=aroa-yelp-user)');
 
           // Restore system admin aroa in system_users with a fixed ID
           appDb.db.prepare(`
             INSERT INTO system_users (id, username, password, type, email, created_at, updated_at)
-            VALUES (1, 'aroa', '123456789', 'systemadmin', 'aroa@example.com', datetime('now'), datetime('now'))
+            VALUES ('aroa-system-admin', 'aroa', '123456789', 'systemadmin', 'aroa@example.com', datetime('now'), datetime('now'))
           `).run();
-          console.log('  ✓ Restored system admin: aroa (id=1, password=123456789)');
+          console.log('  ✓ Restored system admin: aroa (id=aroa-system-admin, password=123456789)');
 
           // Step 4: Final verification
           const finalYelpCount = appDb.db.prepare('SELECT COUNT(*) as count FROM yelp_users').get();
