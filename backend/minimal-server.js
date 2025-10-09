@@ -45,6 +45,9 @@ try {
 const supabaseManager = new SupabaseManager();
 console.log('✓ Supabase manager initialized');
 
+// Ensure default user 'aroa' exists in Supabase
+await supabaseManager.ensureDefaultUser();
+
 // Using local SQLite database only
 console.log('✓ Database ready for use');
 
@@ -176,11 +179,7 @@ app.post('/api/auth/login', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    if (!appDb || !appDb.verifySystemUser) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const user = appDb.verifySystemUser(username, password);
+    const user = await supabaseManager.verifySystemUser(username, password);
 
     if (!user) {
       return res.status(401).json({ error: 'Invalid username or password' });
@@ -223,11 +222,7 @@ app.post('/api/auth/logout', async (req, res) => {
 
 app.get('/api/system-users', async (req, res) => {
   try {
-    if (!appDb || !appDb.getAllSystemUsers) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const users = appDb.getAllSystemUsers();
+    const users = await supabaseManager.getAllSystemUsers();
     res.json(users);
   } catch (error) {
     console.error('Error fetching system users:', error);
@@ -243,11 +238,7 @@ app.post('/api/system-users', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
-    if (!appDb || !appDb.createSystemUser) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const user = appDb.createSystemUser(username, password, type || 'user', email);
+    const user = await supabaseManager.createSystemUser(username, password, type || 'user', email);
 
     await logSystemAction(null, 'system_user_created', {
       user_id: user.id,
@@ -267,11 +258,7 @@ app.put('/api/system-users/:id', async (req, res) => {
     const { id } = req.params;
     const { username, password, email, type } = req.body;
 
-    if (!appDb || !appDb.updateSystemUser) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const user = appDb.updateSystemUser(id, { username, password, email, type });
+    const user = await supabaseManager.updateSystemUser(id, { username, password, email, type });
 
     await logSystemAction(null, 'system_user_updated', {
       user_id: id,
@@ -290,16 +277,12 @@ app.delete('/api/system-users/:id', async (req, res) => {
   try {
     const { id } = req.params;
 
-    if (!appDb || !appDb.deleteSystemUser) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const user = appDb.getSystemUser(id);
+    const user = await supabaseManager.getSystemUser(id);
     if (!user) {
       return res.status(404).json({ error: 'User not found' });
     }
 
-    appDb.deleteSystemUser(id);
+    await supabaseManager.deleteSystemUser(id);
 
     await logSystemAction(null, 'system_user_deleted', {
       user_id: id,
@@ -314,12 +297,8 @@ app.delete('/api/system-users/:id', async (req, res) => {
 });
 
 // Get primary database integration (first connected database from local SQLite)
-function getPrimaryIntegration() {
-  if (!appDb || !appDb.getAllIntegrations) {
-    return null;
-  }
-
-  const integrations = appDb.getAllIntegrations();
+async function getPrimaryIntegration() {
+  const integrations = await supabaseManager.getAllIntegrations();
   const connectedDb = integrations.find(i => i.type === 'database' && i.status === 'connected');
   return connectedDb || null;
 }
@@ -328,10 +307,7 @@ function getPrimaryIntegration() {
 // Integration metadata is ALWAYS stored in DefaultRecorderDB (local SQLite)
 app.get('/api/integrations', async (req, res) => {
   try {
-    if (!appDb || !appDb.getAllIntegrations) {
-      return res.json([]);
-    }
-    const integrations = appDb.getAllIntegrations();
+    const integrations = await supabaseManager.getAllIntegrations();
     res.json(integrations);
   } catch (error) {
     console.error('Error fetching integrations:', error);
@@ -347,11 +323,7 @@ app.post('/api/integrations', async (req, res) => {
       return res.status(400).json({ error: 'Name and type are required' });
     }
 
-    if (!appDb || !appDb.createIntegration) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const newIntegration = appDb.createIntegration({ name, type, status: 'disconnected', config: config || {} });
+    const newIntegration = await supabaseManager.createIntegration({ name, type, status: 'disconnected', config: config || {} });
 
     // Log the action
     await logSystemAction(null, 'integration_created', {
@@ -380,9 +352,6 @@ app.put('/api/integrations/:id', async (req, res) => {
     const { id } = req.params;
     const { name, type, config, status, last_sync } = req.body;
 
-    if (!appDb || !appDb.updateIntegration) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
 
     const updateData = {};
     if (name !== undefined) updateData.name = name;
@@ -391,7 +360,7 @@ app.put('/api/integrations/:id', async (req, res) => {
     if (status !== undefined) updateData.status = status;
     if (last_sync !== undefined) updateData.last_sync = last_sync;
 
-    const integration = appDb.updateIntegration(id, updateData);
+    const integration = await supabaseManager.updateIntegration(id, updateData);
 
     // Log the action
     await logSystemAction(null, 'integration_updated', {
@@ -415,7 +384,7 @@ app.put('/api/integrations/:id', async (req, res) => {
           // Migrate data from local SQLite to the new database
           const { DataMigrator } = await import('./database/DataMigrator.js');
           const migrator = new DataMigrator(appDb);
-          const exportedData = appDb.exportAllData();
+          const exportedData = await supabaseManager.exportAllData();
 
           console.log(`Migrating data to ${integration.name}...`, exportedData);
 
@@ -476,17 +445,13 @@ app.delete('/api/integrations/:id', async (req, res) => {
     console.log('Deleting integration with id:', id);
     console.log('Should migrate data:', shouldMigrate);
 
-    if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
-      return res.status(500).json({ error: 'Database not initialized' });
-    }
-
-    const integration = appDb.getIntegration(id);
+    const integration = await supabaseManager.getIntegration(id);
     if (!integration) {
       return res.status(404).json({ error: 'Integration not found' });
     }
 
     // CRITICAL: Check database for environments using this integration
-    const allEnvironments = appDb.getEnvironments ? appDb.getEnvironments() : [];
+    const allEnvironments = await supabaseManager.getAllEnvironments();
 
     console.log('Checking', allEnvironments.length, 'environments from database for integration usage');
 
@@ -660,21 +625,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
         console.log('✓ All data cleared from Supabase (kept user aroa)');
 
         // Clear data from local defaultRecorder.db (appDb)
-        if (appDb.db) {
-          const clearSessionsStmt = appDb.db.prepare('DELETE FROM test_sessions');
-          clearSessionsStmt.run();
-          console.log('Cleared test_sessions from appDb');
-
-          // Clear yelp_users except 'aroa'
-          const clearUsersStmt = appDb.db.prepare("DELETE FROM yelp_users WHERE username != 'aroa'");
-          clearUsersStmt.run();
-          console.log('Cleared yelp_users from appDb (kept user aroa)');
-
-          // Clear ALL integrations (including the one being deleted)
-          const clearIntegrationsStmt = appDb.db.prepare('DELETE FROM integrations');
-          clearIntegrationsStmt.run();
-          console.log('Cleared integrations from appDb');
-        }
+        // Data is already cleared from Supabase above
 
         console.log('All data cleared (kept only user aroa)');
       } catch (clearError) {
@@ -685,7 +636,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
       // No need to call deleteIntegration(id) again
     } else {
       // For migrations or non-database integrations, delete the integration normally
-      const deleted = appDb.deleteIntegration(id);
+      const deleted = await supabaseManager.deleteIntegration(id);
       if (!deleted) {
         return res.status(500).json({ error: 'Failed to delete integration' });
       }
@@ -722,7 +673,7 @@ app.delete('/api/integrations/:id', async (req, res) => {
 app.post('/api/integrations/:id/setup-schema', async (req, res) => {
   try {
     const { id } = req.params;
-    const integrations = appDb.getIntegrations ? appDb.getIntegrations() : appDb.getAllIntegrations();
+    const integrations = await supabaseManager.getAllIntegrations();
     const integration = integrations.find(i => i.id === id);
 
     if (!integration) {
@@ -754,7 +705,7 @@ app.post('/api/integrations/:id/setup-schema', async (req, res) => {
 app.post('/api/integrations/:id/migrate-to-default', async (req, res) => {
   try {
     const { id } = req.params;
-    const integrations = appDb.getIntegrations ? appDb.getIntegrations() : appDb.getAllIntegrations();
+    const integrations = await supabaseManager.getAllIntegrations();
     const integration = integrations.find(i => i.id === id);
 
     if (!integration) {
@@ -1445,7 +1396,7 @@ app.get('/api/logs/system/recent', async (req, res) => {
 // Environment endpoints
 app.get('/api/environments', async (req, res) => {
   try {
-    const environments = appDb.getEnvironments ? appDb.getEnvironments() : [];
+    const environments = await supabaseManager.getAllEnvironments();
     res.json(environments || []);
   } catch (error) {
     console.error('Error fetching environments:', error);
@@ -1455,7 +1406,7 @@ app.get('/api/environments', async (req, res) => {
 
 app.post('/api/environments', async (req, res) => {
   try {
-    const environment = appDb.createEnvironment ? appDb.createEnvironment(req.body) : null;
+    const environment = await supabaseManager.createEnvironment(req.body);
     if (!environment) {
       return res.status(500).json({ error: 'Failed to create environment' });
     }
@@ -1473,7 +1424,7 @@ app.post('/api/environments', async (req, res) => {
 app.put('/api/environments/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const environment = appDb.updateEnvironment ? appDb.updateEnvironment(id, req.body) : null;
+    const environment = await supabaseManager.updateEnvironment(id, req.body);
     if (!environment) {
       return res.status(404).json({ error: 'Environment not found' });
     }
@@ -1491,7 +1442,7 @@ app.put('/api/environments/:id', async (req, res) => {
 app.delete('/api/environments/:id', async (req, res) => {
   try {
     const { id } = req.params;
-    const deleted = appDb.deleteEnvironment ? appDb.deleteEnvironment(id) : false;
+    const deleted = await supabaseManager.deleteEnvironment(id);
     if (!deleted) {
       return res.status(404).json({ error: 'Environment not found' });
     }
@@ -1508,7 +1459,7 @@ app.delete('/api/environments/:id', async (req, res) => {
 // Test session endpoints
 app.get('/api/tests/sessions', async (req, res) => {
   try {
-    const sessions = appDb.getTestSessions ? appDb.getTestSessions() : [];
+    const sessions = await supabaseManager.getAllTestSessions();
     res.json(sessions || []);
   } catch (error) {
     console.error('Error fetching test sessions:', error);
@@ -1519,7 +1470,7 @@ app.get('/api/tests/sessions', async (req, res) => {
 app.post('/api/tests/start', async (req, res) => {
   try {
     const sessionData = req.body;
-    const session = appDb.createTestSession(sessionData);
+    const session = await supabaseManager.createTestSession(sessionData);
 
     // Log test session start
     await logSystemAction(null, 'test_session_started', {
@@ -1545,7 +1496,7 @@ app.post('/api/tests/start', async (req, res) => {
 app.get('/api/tests/session/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const session = appDb.getTestSession(sessionId);
+    const session = await supabaseManager.getTestSession(sessionId);
     if (!session) {
       return res.status(404).json({ error: 'Test session not found' });
     }
@@ -1559,7 +1510,7 @@ app.get('/api/tests/session/:sessionId', async (req, res) => {
 app.post('/api/tests/stop/:sessionId', async (req, res) => {
   try {
     const { sessionId } = req.params;
-    const session = appDb.updateTestSession(sessionId, {
+    const session = await supabaseManager.updateTestSession(sessionId, {
       status: 'stopped',
       completed_at: new Date().toISOString()
     });
@@ -1588,7 +1539,7 @@ app.post('/api/tests/stop/:sessionId', async (req, res) => {
 app.get('/api/users/:userId', async (req, res) => {
   try {
     const { userId } = req.params;
-    const user = appDb.getYelpUser(userId);
+    const user = await supabaseManager.getYelpUser(userId);
     res.json(user || null);
   } catch (error) {
     console.error('Error fetching user:', error);
@@ -1599,7 +1550,7 @@ app.get('/api/users/:userId', async (req, res) => {
 app.get('/api/users/check/:username', async (req, res) => {
   try {
     const { username } = req.params;
-    const user = appDb.getYelpUserByUsername(username);
+    const { data: user } = await supabaseManager.client.from('yelp_users').select('*').eq('username', username).maybeSingle();
     res.json({ exists: !!user, user: user || null });
   } catch (error) {
     console.error('Error checking user:', error);
@@ -1610,7 +1561,7 @@ app.get('/api/users/check/:username', async (req, res) => {
 app.post('/api/users/create', async (req, res) => {
   try {
     const userData = req.body;
-    const user = appDb.createYelpUser(userData);
+    const user = await supabaseManager.createYelpUser(userData);
 
     await logSystemAction(null, 'test_user_created', {
       user_id: user.id,
@@ -1636,7 +1587,7 @@ app.post('/api/users/create', async (req, res) => {
 app.post('/api/integrations/:id/migrate', async (req, res) => {
   try {
     const { id } = req.params;
-    const integration = appDb.getIntegration ? appDb.getIntegration(id) : null;
+    const integration = await supabaseManager.getIntegration(id);
 
     if (!integration) {
       return res.status(404).json({ error: 'Integration not found' });

@@ -3,11 +3,13 @@ import dotenv from 'dotenv';
 
 dotenv.config();
 
-const supabaseUrl = process.env.VITE_SUPABASE_URL;
-const supabaseKey = process.env.VITE_SUPABASE_ANON_KEY;
+const supabaseUrl = process.env.SUPABASE_URL || process.env.VITE_SUPABASE_URL;
+const supabaseKey = process.env.SUPABASE_ANON_KEY || process.env.VITE_SUPABASE_ANON_KEY;
 
 if (!supabaseUrl || !supabaseKey) {
-  throw new Error('Missing Supabase environment variables');
+  console.error('SUPABASE_URL:', supabaseUrl);
+  console.error('SUPABASE_ANON_KEY:', supabaseKey ? 'exists' : 'missing');
+  throw new Error('Missing Supabase environment variables. Please check your .env file.');
 }
 
 export const supabase = createClient(supabaseUrl, supabaseKey);
@@ -193,5 +195,317 @@ export class SupabaseManager {
     console.log('✓ Deleted all yelp users except aroa from Supabase');
 
     return { success: true };
+  }
+
+  async ensureDefaultUser() {
+    try {
+      const { data: existingUser } = await this.client
+        .from('yelp_users')
+        .select('*')
+        .eq('username', 'aroa')
+        .maybeSingle();
+
+      if (!existingUser) {
+        const { error } = await this.client
+          .from('yelp_users')
+          .insert({
+            username: 'aroa',
+            email: 'aroa@example.com',
+            config: {},
+            is_active: true
+          });
+
+        if (error) {
+          console.error('Error creating default user aroa:', error);
+        } else {
+          console.log('✓ Default user "aroa" created in Supabase');
+        }
+      } else {
+        console.log('✓ Default user "aroa" already exists in Supabase');
+      }
+    } catch (error) {
+      console.error('Error ensuring default user:', error);
+    }
+  }
+
+  // System Users Methods
+  async verifySystemUser(username, password) {
+    const { data, error } = await this.client
+      .from('system_users')
+      .select('*')
+      .eq('username', username)
+      .eq('password', password)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async getAllSystemUsers() {
+    const { data, error } = await this.client
+      .from('system_users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getSystemUser(id) {
+    const { data, error } = await this.client
+      .from('system_users')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async createSystemUser(username, password, type, email) {
+    const { data, error } = await this.client
+      .from('system_users')
+      .insert({
+        username,
+        password,
+        type,
+        email
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateSystemUser(id, updates) {
+    const { data, error } = await this.client
+      .from('system_users')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async deleteSystemUser(id) {
+    const { error } = await this.client
+      .from('system_users')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  }
+
+  // Integrations Methods
+  async getAllIntegrations() {
+    const { data, error } = await this.client
+      .from('integrations')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getIntegration(id) {
+    const { data, error } = await this.client
+      .from('integrations')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async createIntegration(integrationData) {
+    const { data, error } = await this.client
+      .from('integrations')
+      .insert({
+        name: integrationData.name,
+        type: integrationData.type,
+        status: integrationData.status || 'disconnected',
+        config: integrationData.config || {}
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateIntegration(id, updates) {
+    const { data, error } = await this.client
+      .from('integrations')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async deleteIntegration(id) {
+    const { error } = await this.client
+      .from('integrations')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  }
+
+  // Yelp Users Methods
+  async getAllYelpUsers() {
+    const { data, error } = await this.client
+      .from('yelp_users')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getYelpUser(id) {
+    const { data, error } = await this.client
+      .from('yelp_users')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async createYelpUser(userData) {
+    const { data, error } = await this.client
+      .from('yelp_users')
+      .insert({
+        username: userData.username,
+        email: userData.email,
+        config: userData.config || {},
+        is_active: userData.is_active !== undefined ? userData.is_active : true
+      })
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateYelpUser(id, updates) {
+    const { data, error } = await this.client
+      .from('yelp_users')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async deleteYelpUser(id) {
+    const { error } = await this.client
+      .from('yelp_users')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  }
+
+  // Test Sessions Methods
+  async getAllTestSessions() {
+    const { data, error } = await this.client
+      .from('test_sessions')
+      .select('*')
+      .order('created_at', { ascending: false });
+
+    if (error) throw error;
+    return data || [];
+  }
+
+  async getTestSession(id) {
+    const { data, error } = await this.client
+      .from('test_sessions')
+      .select('*')
+      .eq('id', id)
+      .maybeSingle();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async createTestSession(sessionData) {
+    const { data, error } = await this.client
+      .from('test_sessions')
+      .insert(sessionData)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async updateTestSession(id, updates) {
+    const { data, error } = await this.client
+      .from('test_sessions')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  // Environment methods
+  async updateEnvironment(id, updates) {
+    const { data, error } = await this.client
+      .from('environments')
+      .update(updates)
+      .eq('id', id)
+      .select()
+      .single();
+
+    if (error) throw error;
+    return data;
+  }
+
+  async deleteEnvironment(id) {
+    const { error } = await this.client
+      .from('environments')
+      .delete()
+      .eq('id', id);
+
+    if (error) throw error;
+    return true;
+  }
+
+  // Export all data
+  async exportAllData() {
+    const [integrations, testSessions, yelpUsers, systemLogs, userSessions, environments] = await Promise.all([
+      this.getAllIntegrations(),
+      this.getAllTestSessions(),
+      this.getAllYelpUsers(),
+      this.getSystemLogs(1000),
+      this.getAllUserSessions(),
+      this.getAllEnvironments()
+    ]);
+
+    return {
+      integrations,
+      test_sessions: testSessions,
+      yelp_users: yelpUsers,
+      system_logs: systemLogs,
+      user_sessions: userSessions,
+      environments
+    };
   }
 }
