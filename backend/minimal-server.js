@@ -1264,7 +1264,7 @@ app.get('/api/logs/system/recent', async (req, res) => {
 // Test session endpoints
 app.get('/api/tests/sessions', async (req, res) => {
   try {
-    const sessions = appDb.getAllTestSessions();
+    const sessions = appDb.getTestSessions ? appDb.getTestSessions() : [];
     res.json(sessions || []);
   } catch (error) {
     console.error('Error fetching test sessions:', error);
