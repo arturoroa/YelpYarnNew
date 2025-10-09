@@ -90,16 +90,22 @@ export class DefaultRecorderDB {
   }
 
   insertDefaultSystemUser() {
-    const existingUsers = this.db.prepare('SELECT COUNT(*) as count FROM system_users').get();
+    try {
+      const existingUsers = this.db.prepare('SELECT COUNT(*) as count FROM system_users').get();
 
-    if (existingUsers.count === 0) {
-      const stmt = this.db.prepare(`
-        INSERT INTO system_users (id, username, password, type)
-        VALUES (?, ?, ?, ?)
-      `);
+      if (existingUsers.count === 0) {
+        const stmt = this.db.prepare(`
+          INSERT INTO system_users (id, username, password, type)
+          VALUES (?, ?, ?, ?)
+        `);
 
-      stmt.run(randomUUID(), 'aroa', '123456789', 'systemadmin');
-      console.log('✓ Default system admin user created (aroa)');
+        stmt.run(randomUUID(), 'aroa', '123456789', 'systemadmin');
+        console.log('✓ Default system admin user created (aroa/123456789)');
+      } else {
+        console.log(`✓ System users table already has ${existingUsers.count} user(s)`);
+      }
+    } catch (error) {
+      console.error('Error inserting default system user:', error);
     }
   }
 
