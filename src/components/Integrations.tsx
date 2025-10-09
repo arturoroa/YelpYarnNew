@@ -176,21 +176,38 @@ export default function Integrations() {
     }
   };
 
+  const [deleteModal, setDeleteModal] = useState<{ integrationId: string; integrationName: string; integrationType: IntegrationType } | null>(null);
+  const [isDeleting, setIsDeleting] = useState(false);
 
   const handleDeleteIntegration = async (id: string) => {
+    const integration = integrations.find(i => i.id === id);
+    if (!integration) {
+      showToast('Integration not found', 'error');
+      return;
+    }
+
+    // For database integrations, show confirmation modal
+    if (integration.type === 'database') {
+      setDeleteModal({
+        integrationId: id,
+        integrationName: integration.name,
+        integrationType: integration.type
+      });
+      return;
+    }
+
+    // For non-database integrations, delete directly
+    await performDelete(id, false);
+  };
+
+  const performDelete = async (id: string, migrateData: boolean) => {
+    setIsDeleting(true);
     try {
-      console.log('=== INTEGRATION DELETION CHECK ===');
-      console.log('Attempting to delete integration ID:', id);
+      console.log('=== INTEGRATION DELETION ===');
+      console.log('Integration ID:', id);
+      console.log('Migrate data:', migrateData);
 
-      const integration = integrations.find(i => i.id === id);
-      if (!integration) {
-        showToast('Integration not found', 'error');
-        return;
-      }
-
-      console.log('Attempting to delete integration...');
-
-      const response = await fetch(`/api/integrations/${id}`, {
+      const response = await fetch(`/api/integrations/${id}?migrate=${migrateData}`, {
         method: 'DELETE',
         headers: { 'Content-Type': 'application/json' }
       });
@@ -205,6 +222,7 @@ export default function Integrations() {
 
         if (response.status === 400 && errorData.isLinked) {
           showToast(errorData.error || 'Cannot delete integration that is linked to environments', 'error');
+          setDeleteModal(null);
           return;
         }
 
@@ -214,8 +232,9 @@ export default function Integrations() {
       const result = await response.json();
 
       await fetchIntegrations();
+      setDeleteModal(null);
 
-      if (integration.type === 'database' && result.migrated) {
+      if (result.migrated) {
         showToast(`Integration deleted successfully. Data migrated: ${JSON.stringify(result.migrated)}`, 'success');
       } else {
         showToast('Integration deleted successfully', 'success');
@@ -223,6 +242,8 @@ export default function Integrations() {
     } catch (error) {
       console.error('Error deleting integration:', error);
       showToast(error instanceof Error ? error.message : 'Failed to delete integration', 'error');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -1127,6 +1148,67 @@ export default function Integrations() {
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
               >
                 Add Integration
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {deleteModal && (
+        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
+          <div className="bg-white rounded-lg p-6 w-full max-w-md">
+            <h2 className="text-xl font-bold mb-4 text-gray-900">Delete Database Integration</h2>
+
+            <div className="mb-6">
+              <p className="text-gray-700 mb-4">
+                You are about to delete the database integration <strong>{deleteModal.integrationName}</strong>.
+              </p>
+
+              <div className="bg-blue-50 border-l-4 border-blue-400 p-4 mb-4">
+                <p className="text-sm text-blue-700">
+                  <strong>Data Preservation:</strong> You can choose to migrate all data from this database to defaultRecorder.db before deletion to preserve your data.
+                </p>
+              </div>
+
+              <p className="text-sm text-gray-700 font-medium mb-2">
+                What would you like to do?
+              </p>
+
+              <ul className="list-disc list-inside text-sm text-gray-600 space-y-1">
+                <li><strong>Cancel:</strong> Keep the integration</li>
+                <li><strong>Migrate Data:</strong> Copy all data to defaultRecorder.db, then delete integration</li>
+                <li><strong>Delete All Data:</strong> Delete integration and all its data permanently</li>
+              </ul>
+            </div>
+
+            <div className="flex justify-end space-x-3">
+              <button
+                onClick={() => setDeleteModal(null)}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50"
+              >
+                Cancel
+              </button>
+              <button
+                onClick={() => performDelete(deleteModal.integrationId, true)}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-blue-600 text-white rounded hover:bg-blue-700 disabled:opacity-50 flex items-center"
+              >
+                {isDeleting ? (
+                  <>
+                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
+                    Processing...
+                  </>
+                ) : (
+                  'Migrate Data'
+                )}
+              </button>
+              <button
+                onClick={() => performDelete(deleteModal.integrationId, false)}
+                disabled={isDeleting}
+                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50"
+              >
+                Delete All Data
               </button>
             </div>
           </div>

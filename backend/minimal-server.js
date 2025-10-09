@@ -465,7 +465,9 @@ app.put('/api/integrations/:id', async (req, res) => {
 app.delete('/api/integrations/:id', async (req, res) => {
   try {
     const { id } = req.params;
+    const shouldMigrate = req.query.migrate === 'true';
     console.log('Deleting integration with id:', id);
+    console.log('Should migrate data:', shouldMigrate);
 
     if (!appDb || !appDb.getIntegration || !appDb.deleteIntegration) {
       return res.status(500).json({ error: 'Database not initialized' });
@@ -509,10 +511,10 @@ app.delete('/api/integrations/:id', async (req, res) => {
       });
     }
 
-    // If it's a database integration that's not linked, migrate data before deletion
+    // If it's a database integration and migration is requested, migrate data before deletion
     let migrationResult = null;
-    if (integration.type === 'database') {
-      console.log(`Database integration ${integration.name} is not linked. Migrating data before deletion...`);
+    if (integration.type === 'database' && shouldMigrate) {
+      console.log(`Migrating data from database integration ${integration.name} before deletion...`);
 
       try {
         const { IntegrationDB } = await import('./database/IntegrationDB.js');
@@ -550,6 +552,13 @@ app.delete('/api/integrations/:id', async (req, res) => {
           note: 'Proceeding with deletion despite migration failure'
         });
       }
+    } else if (integration.type === 'database' && !shouldMigrate) {
+      console.log(`Deleting database integration ${integration.name} without migration (data will be lost)`);
+      await logSystemAction(null, 'integration_deleted_without_migration', {
+        integration_id: id,
+        integration_name: integration.name,
+        note: 'User chose to delete without migrating data'
+      });
     }
 
     const deleted = appDb.deleteIntegration(id);
