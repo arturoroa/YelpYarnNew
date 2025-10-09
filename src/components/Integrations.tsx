@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw, AlertTriangle } from 'lucide-react';
+import { Database, Server, Key, Shield, Plus, Trash2, CircleCheck as CheckCircle, Circle as XCircle, Pencil, Save, X, RefreshCw } from 'lucide-react';
 
 type IntegrationType = 'database' | 'proxy' | 'vpn';
 type IntegrationStatus = 'connected' | 'disconnected' | 'error';
@@ -176,8 +176,6 @@ export default function Integrations() {
     }
   };
 
-  const [migrationModal, setMigrationModal] = useState<{ show: boolean; integrationId: string; integrationName: string; inUse: boolean } | null>(null);
-  const [isMigrating, setIsMigrating] = useState(false);
 
   const handleDeleteIntegration = async (id: string) => {
     try {
@@ -205,73 +203,26 @@ export default function Integrations() {
           throw new Error('Failed to delete integration');
         }
 
-        if (response.status === 400) {
-          if (integration.type === 'database') {
-            setMigrationModal({
-              show: true,
-              integrationId: id,
-              integrationName: integration.name,
-              inUse: true
-            });
-            showToast(errorData.error || 'Integration is in use', 'error');
-            return;
-          }
-
-          showToast(errorData.error || 'Cannot delete integration that is in use', 'error');
+        if (response.status === 400 && errorData.isLinked) {
+          showToast(errorData.error || 'Cannot delete integration that is linked to environments', 'error');
           return;
         }
 
         throw new Error(errorData.error || 'Failed to delete integration');
       }
 
+      const result = await response.json();
+
       await fetchIntegrations();
-      showToast('Integration deleted successfully', 'success');
+
+      if (integration.type === 'database' && result.migrated) {
+        showToast(`Integration deleted successfully. Data migrated: ${JSON.stringify(result.migrated)}`, 'success');
+      } else {
+        showToast('Integration deleted successfully', 'success');
+      }
     } catch (error) {
       console.error('Error deleting integration:', error);
       showToast(error instanceof Error ? error.message : 'Failed to delete integration', 'error');
-    }
-  };
-
-  const handleMigrateAndDelete = async () => {
-    if (!migrationModal) return;
-
-    setIsMigrating(true);
-    try {
-      // Step 1: Migrate data back to defaultRecorder.db
-      console.log(`Migrating data from integration ${migrationModal.integrationId}...`);
-      const migrateResponse = await fetch(`/api/integrations/${migrationModal.integrationId}/migrate-to-default`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (!migrateResponse.ok) {
-        const error = await migrateResponse.json();
-        throw new Error(error.error || 'Failed to migrate data');
-      }
-
-      const migrateResult = await migrateResponse.json();
-      console.log('Migration successful:', migrateResult);
-      showToast(`Data migrated: ${JSON.stringify(migrateResult.migrated)}`, 'success');
-
-      // Step 2: Now delete the integration
-      const deleteResponse = await fetch(`/api/integrations/${migrationModal.integrationId}`, {
-        method: 'DELETE',
-        headers: { 'Content-Type': 'application/json' }
-      });
-
-      if (!deleteResponse.ok) {
-        const error = await deleteResponse.json();
-        throw new Error(error.error || 'Failed to delete integration');
-      }
-
-      await fetchIntegrations();
-      showToast('Integration deleted successfully after data migration', 'success');
-      setMigrationModal(null);
-    } catch (error) {
-      console.error('Error migrating and deleting:', error);
-      showToast(error instanceof Error ? error.message : 'Failed to migrate and delete integration', 'error');
-    } finally {
-      setIsMigrating(false);
     }
   };
 
@@ -1176,68 +1127,6 @@ export default function Integrations() {
                 className="bg-blue-600 text-white px-4 py-2 rounded-lg hover:bg-blue-700"
               >
                 Add Integration
-              </button>
-            </div>
-          </div>
-        </div>
-      )}
-
-      {migrationModal && (
-        <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4 text-gray-900">Data Migration Required</h2>
-
-            <div className="mb-6">
-              <p className="text-gray-700 mb-4">
-                The integration <strong>{migrationModal.integrationName}</strong> is currently in use by one or more environments.
-              </p>
-
-              <div className="bg-yellow-50 border-l-4 border-yellow-400 p-4 mb-4">
-                <div className="flex">
-                  <AlertTriangle className="h-5 w-5 text-yellow-400 mr-2" />
-                  <div>
-                    <p className="text-sm text-yellow-700">
-                      <strong>Important:</strong> Before deletion, all data from this database integration will be migrated back to defaultRecorder.db to preserve your data.
-                    </p>
-                  </div>
-                </div>
-              </div>
-
-              <p className="text-sm text-gray-600 mb-2">
-                This will:
-              </p>
-              <ul className="list-disc list-inside text-sm text-gray-600 mb-4 space-y-1">
-                <li>Export all data (integrations, test sessions, users, logs)</li>
-                <li>Migrate data to defaultRecorder.db</li>
-                <li>Delete the integration after successful migration</li>
-              </ul>
-
-              <p className="text-sm text-gray-700 font-medium">
-                Do you want to proceed with the migration and deletion?
-              </p>
-            </div>
-
-            <div className="flex justify-end space-x-3">
-              <button
-                onClick={() => setMigrationModal(null)}
-                disabled={isMigrating}
-                className="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 disabled:opacity-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={handleMigrateAndDelete}
-                disabled={isMigrating}
-                className="px-4 py-2 bg-red-600 text-white rounded hover:bg-red-700 disabled:opacity-50 flex items-center"
-              >
-                {isMigrating ? (
-                  <>
-                    <RefreshCw className="w-4 h-4 mr-2 animate-spin" />
-                    Migrating...
-                  </>
-                ) : (
-                  'Migrate & Delete'
-                )}
               </button>
             </div>
           </div>

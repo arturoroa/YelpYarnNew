@@ -498,14 +498,58 @@ app.delete('/api/integrations/:id', async (req, res) => {
         integration_id: id,
         integration_name: integration?.name,
         integration_type: integration?.type,
-        reason: 'Integration in use',
+        reason: 'Integration linked to environments',
         used_in_environments: envNames
       });
 
       return res.status(400).json({
-        error: `Cannot delete integration. It is currently used in the following environments: ${envNames}. Please remove it from these environments first.`,
-        environmentNames: envNames
+        error: `Cannot delete integration. It is currently linked to the following environments: ${envNames}. Please unlink it from these environments first.`,
+        environmentNames: envNames,
+        isLinked: true
       });
+    }
+
+    // If it's a database integration that's not linked, migrate data before deletion
+    let migrationResult = null;
+    if (integration.type === 'database') {
+      console.log(`Database integration ${integration.name} is not linked. Migrating data before deletion...`);
+
+      try {
+        const { IntegrationDB } = await import('./database/IntegrationDB.js');
+        const { DataMigrator } = await import('./database/DataMigrator.js');
+
+        const integrationDb = new IntegrationDB(integration);
+        await integrationDb.connect();
+
+        const exportedData = await integrationDb.exportAllData();
+        console.log('Data exported:', {
+          integrations: exportedData.integrations.length,
+          test_sessions: exportedData.test_sessions.length,
+          yelp_users: exportedData.yelp_users.length,
+          system_logs: exportedData.system_logs.length
+        });
+
+        const migrator = new DataMigrator({ exportAllData: () => exportedData });
+        migrationResult = await migrator.migrateToSQLite(appDb);
+
+        await integrationDb.disconnect();
+
+        console.log('Migration completed successfully:', migrationResult);
+
+        await logSystemAction(null, 'integration_data_migrated_on_delete', {
+          integration_id: id,
+          integration_name: integration.name,
+          migrated: migrationResult.migrated
+        });
+      } catch (migrationError) {
+        console.error('Error during migration:', migrationError);
+        await logSystemAction(null, 'integration_migration_warning', {
+          integration_id: id,
+          integration_name: integration.name,
+          error: migrationError.message,
+          note: 'Proceeding with deletion despite migration failure'
+        });
+      }
     }
 
     const deleted = appDb.deleteIntegration(id);
@@ -517,11 +561,15 @@ app.delete('/api/integrations/:id', async (req, res) => {
     await logSystemAction(null, 'integration_deleted', {
       integration_id: id,
       integration_name: integration?.name,
-      integration_type: integration?.type
+      integration_type: integration?.type,
+      data_migrated: !!migrationResult
     });
 
     console.log('Successfully deleted integration');
-    res.json({ success: true });
+    res.json({
+      success: true,
+      migrated: migrationResult ? migrationResult.migrated : null
+    });
   } catch (error) {
     console.error('Error deleting integration:', error);
 
