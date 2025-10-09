@@ -429,39 +429,132 @@ export default function Integrations() {
         {(draft.type === 'database') && (
           <>
             <div>
-              <label className="block text-gray-700 mb-1">Protocol</label>
+              <label className="block text-gray-700 mb-1">Connection Method</label>
               <select
                 className="w-full border border-gray-300 rounded-md px-3 py-2"
-                value={cfg.protocol || 'postgresql'}
+                value={cfg.connectionMethod || 'sqlite'}
                 onChange={(e) =>
                   setDraft(prev => ({
                     ...(prev as any),
-                    config: { ...(cfg as any), protocol: e.target.value }
+                    config: { ...(cfg as any), connectionMethod: e.target.value }
                   }))
                 }
               >
-                <option value="postgresql">PostgreSQL</option>
-                <option value="mysql">MySQL</option>
                 <option value="sqlite">SQLite</option>
+                <option value="on-prem">On-Premise</option>
+                <option value="api-token">API/Token</option>
               </select>
             </div>
-            {cfg.protocol === 'sqlite' ? (
+            {cfg.connectionMethod === 'sqlite' ? (
               <div>
                 <label className="block text-gray-700 mb-1">Database Name</label>
                 <input
                   className="w-full border border-gray-300 rounded-md px-3 py-2"
-                  value={cfg.databaseName || ''}
+                  value={cfg.database || ''}
                   onChange={(e) =>
                     setDraft(prev => ({
                       ...(prev as any),
-                      config: { ...(cfg as any), databaseName: e.target.value }
+                      config: { ...(cfg as any), database: e.target.value }
                     }))
                   }
-                  placeholder="mydatabase"
+                  placeholder="mydatabase.db"
                 />
               </div>
+            ) : cfg.connectionMethod === 'api-token' ? (
+              <>
+                <div>
+                  <label className="block text-gray-700 mb-1">Database Type</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={cfg.protocol || 'postgresql'}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), protocol: e.target.value }
+                      }))
+                    }
+                  >
+                    <option value="postgresql">PostgreSQL</option>
+                    <option value="mysql">MySQL</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-gray-700 mb-1">Host</label>
+                  <input
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={cfg.host || ''}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), host: e.target.value }
+                      }))
+                    }
+                    placeholder="db.example.com"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 mb-1">Port</label>
+                  <input
+                    type="number"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={typeof cfg.port === 'number' && Number.isFinite(cfg.port) ? cfg.port : ''}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), port: parsePort(e.target.value) }
+                      }))
+                    }
+                    placeholder="5432"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 mb-1">Database Name</label>
+                  <input
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={cfg.database || ''}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), database: e.target.value }
+                      }))
+                    }
+                    placeholder="yelp_test"
+                  />
+                </div>
+                <div>
+                  <label className="block text-gray-700 mb-1">API Key / Token</label>
+                  <input
+                    type="password"
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={cfg.apiToken || ''}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), apiToken: e.target.value }
+                      }))
+                    }
+                    placeholder="Enter API key or token"
+                  />
+                </div>
+              </>
             ) : (
               <>
+                <div>
+                  <label className="block text-gray-700 mb-1">Database Type</label>
+                  <select
+                    className="w-full border border-gray-300 rounded-md px-3 py-2"
+                    value={cfg.protocol || 'postgresql'}
+                    onChange={(e) =>
+                      setDraft(prev => ({
+                        ...(prev as any),
+                        config: { ...(cfg as any), protocol: e.target.value }
+                      }))
+                    }
+                  >
+                    <option value="postgresql">PostgreSQL</option>
+                    <option value="mysql">MySQL</option>
+                  </select>
+                </div>
                 <div className="grid grid-cols-2 gap-3">
                   <div>
                     <label className="block text-gray-700 mb-1">Host</label>
@@ -474,6 +567,7 @@ export default function Integrations() {
                           config: { ...(cfg as any), host: e.target.value }
                         }))
                       }
+                      placeholder="localhost"
                     />
                   </div>
                   <div>
@@ -488,6 +582,7 @@ export default function Integrations() {
                           config: { ...(cfg as any), port: parsePort(e.target.value) }
                         }))
                       }
+                      placeholder="5432"
                     />
                   </div>
                 </div>
@@ -502,6 +597,7 @@ export default function Integrations() {
                         config: { ...(cfg as any), database: e.target.value }
                       }))
                     }
+                    placeholder="yelp_test"
                   />
                 </div>
                 <div>
@@ -515,6 +611,7 @@ export default function Integrations() {
                         config: { ...(cfg as any), username: e.target.value }
                       }))
                     }
+                    placeholder="postgres"
                   />
                 </div>
                 <div>
@@ -529,6 +626,7 @@ export default function Integrations() {
                         config: { ...(cfg as any), password: e.target.value }
                       }))
                     }
+                    placeholder="Enter password"
                   />
                 </div>
                 <div className="flex items-center">

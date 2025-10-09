@@ -201,6 +201,7 @@ export default function EnvironmentSelector({
             ...formData.credentials,
           }
         : undefined,
+      integrations: formData.integrations || {},
       isActive: Boolean(formData.isActive),
     };
 
