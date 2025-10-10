@@ -481,6 +481,15 @@ app.delete('/api/integrations/:id', async (req, res) => {
           note: 'Proceeding with deletion despite migration failure'
         });
       }
+
+      // After migration, delete the integration from defaultRecorder.db
+      console.log('Deleting integration from defaultRecorder.db after migration...');
+      const deleted = appDb.deleteIntegration(id);
+      if (!deleted) {
+        console.warn('Warning: Failed to delete integration from defaultRecorder.db');
+      } else {
+        console.log('✓ Integration deleted from defaultRecorder.db');
+      }
     } else if (integration.type === 'database' && !shouldMigrate) {
       console.log(`Deleting data from database integration ${integration.name} (data will be lost)`);
 
@@ -634,8 +643,8 @@ app.delete('/api/integrations/:id', async (req, res) => {
 
       // Integration was already deleted as part of clearing all integrations from appDb
       // No need to call deleteIntegration(id) again
-    } else {
-      // For migrations or non-database integrations, delete the integration normally
+    } else if (integration.type !== 'database') {
+      // For non-database integrations, delete the integration normally
       const deleted = appDb.deleteIntegration(id);
       if (!deleted) {
         return res.status(500).json({ error: 'Failed to delete integration' });
