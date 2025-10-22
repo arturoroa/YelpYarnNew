@@ -1824,6 +1824,30 @@ app.post('/api/users/create-automated', async (req, res) => {
   }
 });
 
+// Get user creation logs
+app.get('/api/user-creation-logs', async (req, res) => {
+  try {
+    const limit = parseInt(req.query.limit) || 100;
+    const logs = appDb.getUserCreationLogs ? appDb.getUserCreationLogs(limit) : [];
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching user creation logs:', error);
+    res.status(500).json({ error: 'Failed to fetch user creation logs' });
+  }
+});
+
+// Get user creation logs by user ID
+app.get('/api/user-creation-logs/user/:userId', async (req, res) => {
+  try {
+    const { userId } = req.params;
+    const logs = appDb.getUserCreationLogsByUserId ? appDb.getUserCreationLogsByUserId(userId) : [];
+    res.json(logs);
+  } catch (error) {
+    console.error('Error fetching user creation logs:', error);
+    res.status(500).json({ error: 'Failed to fetch user creation logs' });
+  }
+});
+
 // Migrate data from defaultRecorder.db to active integration
 app.post('/api/integrations/:id/migrate', async (req, res) => {
   try {

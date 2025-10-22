@@ -30,6 +30,26 @@ interface TestSession {
   test_scenarios: string;
 }
 
+interface UserCreationLog {
+  id: string;
+  user_id: string;
+  username: string;
+  email: string | null;
+  password: string | null;
+  first_name: string | null;
+  last_name: string | null;
+  zip_code: string | null;
+  birth_date: string | null;
+  creation_method: string;
+  created_by: string | null;
+  ip_address: string | null;
+  user_agent: string | null;
+  automation_data: any;
+  status: string;
+  error_message: string | null;
+  created_at: string;
+}
+
 interface TestLogsProps {
   selectedUser?: {guv: string, username: string, email: string} | null;
   onClearFilter?: () => void;
@@ -38,7 +58,9 @@ interface TestLogsProps {
 export default function TestLogs({ selectedUser, onClearFilter }: TestLogsProps) {
   const [logs, setLogs] = useState<TestLog[]>([]);
   const [sessions, setSessions] = useState<TestSession[]>([]);
+  const [userCreationLogs, setUserCreationLogs] = useState<UserCreationLog[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingUserLogs, setLoadingUserLogs] = useState(false);
   const [filter, setFilter] = useState<string>('all');
   const [searchTerm, setSearchTerm] = useState<string>('');
   const [selectedSession, setSelectedSession] = useState<string>('all');
@@ -47,6 +69,7 @@ export default function TestLogs({ selectedUser, onClearFilter }: TestLogsProps)
   useEffect(() => {
     fetchTestLogs();
     fetchTestSessions();
+    fetchUserCreationLogs();
   }, []);
 
   const fetchTestLogs = async () => {
@@ -141,6 +164,19 @@ export default function TestLogs({ selectedUser, onClearFilter }: TestLogsProps)
       setSessions(mockSessions);
     } catch (error) {
       console.error('Failed to fetch test sessions:', error);
+    }
+  };
+
+  const fetchUserCreationLogs = async () => {
+    setLoadingUserLogs(true);
+    try {
+      const response = await apiGet('/api/user-creation-logs?limit=100');
+      setUserCreationLogs(response || []);
+    } catch (error) {
+      console.error('Failed to fetch user creation logs:', error);
+      setUserCreationLogs([]);
+    } finally {
+      setLoadingUserLogs(false);
     }
   };
 
@@ -513,6 +549,132 @@ export default function TestLogs({ selectedUser, onClearFilter }: TestLogsProps)
                 </div>
               ))}
             </div>
+          )}
+        </div>
+      </div>
+
+      {/* User Creation Logs */}
+      <div className="bg-white rounded-xl shadow-sm border border-gray-200">
+        <div className="p-6 border-b border-gray-200">
+          <div className="flex items-center justify-between">
+            <h3 className="text-lg font-semibold text-gray-900">
+              User Creation Log ({userCreationLogs.length})
+            </h3>
+            <button
+              onClick={fetchUserCreationLogs}
+              disabled={loadingUserLogs}
+              className="flex items-center space-x-2 px-3 py-1.5 text-sm font-medium text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded-lg transition-colors disabled:opacity-50"
+            >
+              <RefreshCw className={`w-4 h-4 ${loadingUserLogs ? 'animate-spin' : ''}`} />
+              <span>Refresh</span>
+            </button>
+          </div>
+        </div>
+
+        <div className="overflow-x-auto">
+          {loadingUserLogs ? (
+            <div className="flex justify-center items-center py-12">
+              <RefreshCw className="w-6 h-6 text-gray-400 animate-spin" />
+            </div>
+          ) : userCreationLogs.length === 0 ? (
+            <div className="text-center py-12 text-gray-500">
+              <User className="w-12 h-12 mx-auto mb-3 text-gray-300" />
+              <p>No user creation logs found</p>
+            </div>
+          ) : (
+            <table className="w-full">
+              <thead className="bg-gray-50">
+                <tr>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created At
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Username
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Email
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Password
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Name
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    ZIP Code
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Birth Date
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Method
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Created By
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    IP Address
+                  </th>
+                  <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">
+                    Status
+                  </th>
+                </tr>
+              </thead>
+              <tbody className="bg-white divide-y divide-gray-200">
+                {userCreationLogs.map((log) => (
+                  <tr key={log.id} className="hover:bg-gray-50">
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900">
+                      {new Date(log.created_at).toLocaleString()}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">
+                      {log.username}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {log.email || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600 font-mono">
+                      {log.password || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {log.first_name || log.last_name
+                        ? `${log.first_name || ''} ${log.last_name || ''}`.trim()
+                        : '-'
+                      }
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {log.zip_code || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {log.birth_date || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        log.creation_method === 'automated'
+                          ? 'bg-purple-100 text-purple-800'
+                          : 'bg-blue-100 text-blue-800'
+                      }`}>
+                        {log.creation_method}
+                      </span>
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {log.created_by || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-600">
+                      {log.ip_address || '-'}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${
+                        log.status === 'success'
+                          ? 'bg-green-100 text-green-800'
+                          : 'bg-red-100 text-red-800'
+                      }`}>
+                        {log.status}
+                      </span>
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
           )}
         </div>
       </div>
