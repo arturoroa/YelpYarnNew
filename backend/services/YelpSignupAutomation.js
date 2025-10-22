@@ -18,10 +18,22 @@ class YelpSignupAutomation {
   async initialize() {
     this.browser = await puppeteer.launch({
       headless: this.headless,
-      args: ['--no-sandbox', '--disable-setuid-sandbox']
+      args: [
+        '--no-sandbox',
+        '--disable-setuid-sandbox',
+        '--start-maximized'
+      ]
     });
     this.page = await this.browser.newPage();
     await this.page.setViewport({ width: 1280, height: 800 });
+  }
+
+  getBrowser() {
+    return this.browser;
+  }
+
+  getPage() {
+    return this.page;
   }
 
   async close() {

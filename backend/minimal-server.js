@@ -44,6 +44,9 @@ try {
 // Using local SQLite database only
 console.log('✓ Database ready for use');
 
+// Store active browser instances for testing
+const activeBrowsers = new Map();
+
 // Helper function to log actions to local DB
 async function logSystemAction(userId, action, details = {}) {
   try {
@@ -1718,7 +1721,6 @@ app.post('/api/users/create-automated', async (req, res) => {
     });
 
     const result = await bot.runSignupFlow();
-    await bot.close();
 
     if (result.success && result.data) {
       const userData = {
@@ -1765,10 +1767,13 @@ app.post('/api/users/create-automated', async (req, res) => {
         last_time: result.data.last_time
       });
 
+      activeBrowsers.set(user.id, bot);
+
       res.json({
         success: true,
         user: user,
-        automation_data: result.data
+        automation_data: result.data,
+        browser_active: true
       });
     } else {
       const failureLogData = {
@@ -1820,6 +1825,61 @@ app.post('/api/users/create-automated', async (req, res) => {
     res.status(500).json({
       success: false,
       error: error.message
+    });
+  }
+});
+
+app.get('/api/users/:userId/browser-status', (req, res) => {
+  const userId = parseInt(req.params.userId);
+  const hasBrowser = activeBrowsers.has(userId);
+
+  res.json({
+    userId,
+    browserActive: hasBrowser
+  });
+});
+
+app.post('/api/users/:userId/close-browser', async (req, res) => {
+  try {
+    const userId = parseInt(req.params.userId);
+    const bot = activeBrowsers.get(userId);
+
+    if (bot) {
+      await bot.close();
+      activeBrowsers.delete(userId);
+      res.json({
+        success: true,
+        message: 'Browser closed successfully'
+      });
+    } else {
+      res.status(404).json({
+        success: false,
+        error: 'No active browser found for this user'
+      });
+    }
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
+app.get('/api/users/:userId/browser', (req, res) => {
+  const userId = parseInt(req.params.userId);
+  const bot = activeBrowsers.get(userId);
+
+  if (bot) {
+    res.json({
+      success: true,
+      message: 'Browser instance available',
+      hasPage: !!bot.getPage(),
+      hasBrowser: !!bot.getBrowser()
+    });
+  } else {
+    res.status(404).json({
+      success: false,
+      error: 'No active browser found for this user'
     });
   }
 });
