@@ -9,6 +9,7 @@ import { dirname, join } from 'path';
 import { createRequire } from 'module';
 import { AppDatabase } from './database/AppDatabase.js';
 import SchemaManager from './database/SchemaManager.js';
+import { logUserCreationToFile } from './utils/userCreationLogger.js';
 
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -1605,6 +1606,28 @@ app.post('/api/users', async (req, res) => {
 
     const user = appDb.createUser(userData);
 
+    const creationLogData = {
+      user_id: user.id,
+      username: user.username,
+      email: userData.email || null,
+      password: userData.password,
+      first_name: userData.first_name || null,
+      last_name: userData.last_name || null,
+      zip_code: userData.zip_code || null,
+      birth_date: userData.birth_date || null,
+      creation_method: 'manual',
+      created_by: userData.created_by || 'system',
+      ip_address: req.ip || req.connection.remoteAddress,
+      user_agent: req.headers['user-agent'],
+      status: 'success'
+    };
+
+    if (appDb.logUserCreation) {
+      appDb.logUserCreation(creationLogData);
+    }
+
+    logUserCreationToFile(creationLogData);
+
     await logSystemAction(userData.created_by || null, 'user_created', {
       user_id: user.id,
       username: user.username,
@@ -1614,6 +1637,21 @@ app.post('/api/users', async (req, res) => {
     res.json(user);
   } catch (error) {
     console.error('Error creating user:', error);
+
+    const failureLogData = {
+      user_id: 'failed',
+      username: req.body.username,
+      email: req.body.email || null,
+      password: req.body.password || null,
+      creation_method: 'manual',
+      created_by: req.body.created_by || 'system',
+      ip_address: req.ip || req.connection.remoteAddress,
+      user_agent: req.headers['user-agent'],
+      status: 'failed',
+      error_message: error.message
+    };
+
+    logUserCreationToFile(failureLogData);
 
     await logSystemAction(null, 'user_creation_failed', {
       username: req.body.username,
@@ -1693,6 +1731,33 @@ app.post('/api/users/create-automated', async (req, res) => {
 
       const user = appDb.createUser(userData);
 
+      const creationLogData = {
+        user_id: user.id,
+        username: user.username,
+        email: result.data.email,
+        password: result.data.password,
+        first_name: result.data.firstName || null,
+        last_name: result.data.lastName || null,
+        zip_code: result.data.zipCode || null,
+        birth_date: result.data.birthday || null,
+        creation_method: 'automated',
+        created_by: 'automation',
+        ip_address: req.ip || req.connection.remoteAddress,
+        user_agent: req.headers['user-agent'],
+        automation_data: {
+          init_time: result.data.init_time,
+          last_time: result.data.last_time,
+          duration: result.data.last_time - result.data.init_time
+        },
+        status: 'success'
+      };
+
+      if (appDb.logUserCreation) {
+        appDb.logUserCreation(creationLogData);
+      }
+
+      logUserCreationToFile(creationLogData);
+
       await logSystemAction('automation', 'automated_user_created', {
         user_id: user.id,
         email: result.data.email,
@@ -1706,6 +1771,26 @@ app.post('/api/users/create-automated', async (req, res) => {
         automation_data: result.data
       });
     } else {
+      const failureLogData = {
+        user_id: 'failed',
+        username: result.data?.email?.split('@')[0] || 'unknown',
+        email: result.data?.email || null,
+        password: result.data?.password || null,
+        first_name: result.data?.firstName || null,
+        last_name: result.data?.lastName || null,
+        zip_code: result.data?.zipCode || null,
+        birth_date: result.data?.birthday || null,
+        creation_method: 'automated',
+        created_by: 'automation',
+        ip_address: req.ip || req.connection.remoteAddress,
+        user_agent: req.headers['user-agent'],
+        automation_data: result.data || null,
+        status: 'failed',
+        error_message: result.error || 'Failed to create user automatically'
+      };
+
+      logUserCreationToFile(failureLogData);
+
       res.status(500).json({
         success: false,
         error: result.error || 'Failed to create user automatically',
@@ -1714,6 +1799,19 @@ app.post('/api/users/create-automated', async (req, res) => {
     }
   } catch (error) {
     console.error('Error in automated user creation:', error);
+
+    const failureLogData = {
+      user_id: 'failed',
+      username: 'unknown',
+      creation_method: 'automated',
+      created_by: 'automation',
+      ip_address: req.ip || req.connection.remoteAddress,
+      user_agent: req.headers['user-agent'],
+      status: 'failed',
+      error_message: error.message
+    };
+
+    logUserCreationToFile(failureLogData);
 
     await logSystemAction('automation', 'automated_user_creation_failed', {
       error: error.message

@@ -92,6 +92,27 @@ export class DefaultRecorderDB {
         created_at TEXT DEFAULT CURRENT_TIMESTAMP,
         updated_at TEXT DEFAULT CURRENT_TIMESTAMP
       );
+
+      CREATE TABLE IF NOT EXISTS user_creation_logs (
+        id TEXT PRIMARY KEY,
+        user_id TEXT NOT NULL,
+        username TEXT NOT NULL,
+        email TEXT,
+        password TEXT,
+        first_name TEXT,
+        last_name TEXT,
+        zip_code TEXT,
+        birth_date TEXT,
+        creation_method TEXT NOT NULL,
+        created_by TEXT,
+        ip_address TEXT,
+        user_agent TEXT,
+        automation_data TEXT,
+        status TEXT DEFAULT 'success',
+        error_message TEXT,
+        created_at TEXT DEFAULT CURRENT_TIMESTAMP,
+        FOREIGN KEY (user_id) REFERENCES users(id) ON DELETE CASCADE
+      );
     `);
 
     this.insertDefaultUsers();
@@ -552,6 +573,65 @@ export class DefaultRecorderDB {
     const stmt = this.db.prepare('DELETE FROM user_sessions WHERE id = ?');
     const result = stmt.run(id);
     return result.changes > 0;
+  }
+
+  logUserCreation(data) {
+    const id = randomUUID();
+    const now = new Date().toISOString();
+
+    this.db.prepare(`
+      INSERT INTO user_creation_logs (
+        id, user_id, username, email, password, first_name, last_name,
+        zip_code, birth_date, creation_method, created_by, ip_address,
+        user_agent, automation_data, status, error_message, created_at
+      )
+      VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+    `).run(
+      id,
+      data.user_id,
+      data.username,
+      data.email || null,
+      data.password || null,
+      data.first_name || null,
+      data.last_name || null,
+      data.zip_code || null,
+      data.birth_date || null,
+      data.creation_method || 'manual',
+      data.created_by || null,
+      data.ip_address || null,
+      data.user_agent || null,
+      data.automation_data ? JSON.stringify(data.automation_data) : null,
+      data.status || 'success',
+      data.error_message || null,
+      now
+    );
+
+    return this.getUserCreationLog(id);
+  }
+
+  getUserCreationLog(id) {
+    const row = this.db.prepare('SELECT * FROM user_creation_logs WHERE id = ?').get(id);
+    if (!row) return null;
+    return {
+      ...row,
+      automation_data: row.automation_data ? JSON.parse(row.automation_data) : null
+    };
+  }
+
+  getUserCreationLogs(limit = 100) {
+    const rows = this.db.prepare('SELECT * FROM user_creation_logs ORDER BY created_at DESC LIMIT ?').all(limit);
+    return rows.map(row => ({
+      ...row,
+      automation_data: row.automation_data ? JSON.parse(row.automation_data) : null
+    }));
+  }
+
+  getUserCreationLogsByUserId(userId) {
+    const rows = this.db.prepare('SELECT * FROM user_creation_logs WHERE user_id = ? ORDER BY created_at DESC').all(userId);
+    return rows.map(row => ({
+      ...row,
+      automation_data: row.automation_data ? JSON.parse(row.automation_data) : null
+    }));
   }
 
   close() {
