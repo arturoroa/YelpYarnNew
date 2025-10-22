@@ -1667,6 +1667,65 @@ app.delete('/api/users/:userId', async (req, res) => {
   }
 });
 
+// Automated Yelp user creation endpoint
+app.post('/api/users/create-automated', async (req, res) => {
+  try {
+    console.log('Starting automated Yelp user creation...');
+
+    const { default: YelpSignupAutomation } = await import('./services/YelpSignupAutomation.js');
+
+    const bot = new YelpSignupAutomation({
+      headless: req.body.headless !== false,
+      timeout: req.body.timeout || 30000
+    });
+
+    const result = await bot.runSignupFlow();
+    await bot.close();
+
+    if (result.success && result.data) {
+      const userData = {
+        username: result.data.email.split('@')[0],
+        password: result.data.password,
+        email: result.data.email,
+        type_of_user: 'TestUser',
+        created_by: 'automation'
+      };
+
+      const user = appDb.createUser(userData);
+
+      await logSystemAction('automation', 'automated_user_created', {
+        user_id: user.id,
+        email: result.data.email,
+        init_time: result.data.init_time,
+        last_time: result.data.last_time
+      });
+
+      res.json({
+        success: true,
+        user: user,
+        automation_data: result.data
+      });
+    } else {
+      res.status(500).json({
+        success: false,
+        error: result.error || 'Failed to create user automatically',
+        partial_data: result.data
+      });
+    }
+  } catch (error) {
+    console.error('Error in automated user creation:', error);
+
+    await logSystemAction('automation', 'automated_user_creation_failed', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 // Migrate data from defaultRecorder.db to active integration
 app.post('/api/integrations/:id/migrate', async (req, res) => {
   try {

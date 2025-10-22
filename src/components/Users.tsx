@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from 'react';
-import { Users as UsersIcon, Plus, Pencil, Trash2, Save, X, Search } from 'lucide-react';
+import { Users as UsersIcon, Plus, Pencil, Trash2, Save, X, Search, Wand2 } from 'lucide-react';
 
 interface User {
   id: string;
@@ -17,6 +17,7 @@ export default function Users() {
   const [searchTerm, setSearchTerm] = useState('');
   const [showAddForm, setShowAddForm] = useState(false);
   const [editingId, setEditingId] = useState<string | null>(null);
+  const [isCreatingAutomated, setIsCreatingAutomated] = useState(false);
   const [formData, setFormData] = useState({
     username: '',
     password: '',
@@ -157,7 +158,39 @@ export default function Users() {
 
   const cancelEdit = () => {
     setEditingId(null);
-    setFormData({ username: '', password: '', email: '', type: 'user' });
+    setFormData({ username: '', password: '', email: '', type_of_user: 'TestUser', created_by: '' });
+  };
+
+  const handleCreateAutomatedUser = async () => {
+    setIsCreatingAutomated(true);
+    showToast('Starting automated user creation... This may take a few minutes.', 'info');
+
+    try {
+      const response = await fetch('/api/users/create-automated', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          headless: false,
+          timeout: 30000
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        showToast(`User created successfully: ${result.user.email}`, 'success');
+        await fetchUsers();
+      } else {
+        showToast(result.error || 'Failed to create automated user', 'error');
+      }
+    } catch (error) {
+      console.error('Automated user creation error:', error);
+      showToast('Failed to create automated user', 'error');
+    } finally {
+      setIsCreatingAutomated(false);
+    }
   };
 
   const getUserTypeColor = (type: string) => {
@@ -190,6 +223,14 @@ export default function Users() {
             className="w-full pl-10 pr-4 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
           />
         </div>
+        <button
+          onClick={handleCreateAutomatedUser}
+          disabled={isCreatingAutomated}
+          className={`px-4 py-2 ${isCreatingAutomated ? 'bg-purple-400' : 'bg-purple-600 hover:bg-purple-700'} text-white rounded-lg flex items-center gap-2 transition-colors`}
+        >
+          <Wand2 className={`w-5 h-5 ${isCreatingAutomated ? 'animate-spin' : ''}`} />
+          {isCreatingAutomated ? 'Creating...' : 'Create Automated'}
+        </button>
         <button
           onClick={() => setShowAddForm(true)}
           className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 flex items-center gap-2"
