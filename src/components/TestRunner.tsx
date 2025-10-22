@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Play, Square, Users, Code, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Clock, User, LogOut, Trash, Copy, Upload } from 'lucide-react';
+import { Play, Square, Users, Code, ChevronDown, ChevronUp, AlertCircle, CheckCircle, Clock, User, LogOut, Trash, Copy, Upload, Wand2, UserPlus } from 'lucide-react';
 import { apiGet, apiPost } from '../utils/api';
 
 interface GuvUser {
@@ -195,8 +195,9 @@ const TestRunner: React.FC = () => {
     username: '',
     email: '',
     password: '',
-    confirmPassword: '' // Nuevo campo para confirmar contraseña
+    confirmPassword: ''
   });
+  const [userCreationMode, setUserCreationMode] = useState<'choice' | 'manual' | 'automated'>('choice');
   const [userCreationStatus, setUserCreationStatus] = useState<{
     loading: boolean;
     error: string | null;
@@ -305,7 +306,7 @@ const TestRunner: React.FC = () => {
       });
       return;
     }
-    
+
     if (newUser.password !== newUser.confirmPassword) {
       setUserCreationStatus({
         loading: false,
@@ -314,11 +315,10 @@ const TestRunner: React.FC = () => {
       });
       return;
     }
-    
+
     setUserCreationStatus({ loading: true, error: null, success: false });
 
     try {
-      // Check if username exists
       const existingUser = await apiGet<GuvUser>(`/api/users/check/${newUser.username}`);
       if (existingUser) {
         setUserCreationStatus({
@@ -329,7 +329,6 @@ const TestRunner: React.FC = () => {
         return;
       }
 
-      // Create user as TestUser type
       const userData = {
         username: newUser.username,
         password: newUser.password,
@@ -355,11 +354,66 @@ const TestRunner: React.FC = () => {
       localStorage.setItem('selectedUser', JSON.stringify(mappedUser));
       setUserCreationStatus({ loading: false, error: null, success: true });
       setShowUserModal(false);
+      setUserCreationMode('choice');
       setNewUser({ username: '', email: '', password: '', confirmPassword: '' });
     } catch (error) {
       setUserCreationStatus({
         loading: false,
         error: error instanceof Error ? error.message : 'Failed to create user',
+        success: false
+      });
+    }
+  };
+
+  const createAutomatedUser = async () => {
+    setUserCreationStatus({ loading: true, error: null, success: false });
+
+    try {
+      const response = await fetch('/api/users/create-automated', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json'
+        },
+        body: JSON.stringify({
+          headless: false,
+          timeout: 30000
+        })
+      });
+
+      const result = await response.json();
+
+      if (response.ok && result.success) {
+        const mappedUser: GuvUser = {
+          guv: result.user.id,
+          username: result.user.username,
+          email: result.user.email || '',
+          yelpUserId: result.user.id,
+          status: 'active',
+          sessionCount: 0,
+          createdAt: result.user.creation_time
+        };
+
+        setUsers(prev => [...prev, mappedUser]);
+        setSelectedUser(mappedUser);
+        localStorage.setItem('selectedUser', JSON.stringify(mappedUser));
+        setUserCreationStatus({ loading: false, error: null, success: true });
+
+        setTimeout(() => {
+          setShowUserModal(false);
+          setUserCreationMode('choice');
+          setUserCreationStatus({ loading: false, error: null, success: false });
+        }, 2000);
+      } else {
+        setUserCreationStatus({
+          loading: false,
+          error: result.error || 'Failed to create automated user',
+          success: false
+        });
+      }
+    } catch (error) {
+      setUserCreationStatus({
+        loading: false,
+        error: error instanceof Error ? error.message : 'Failed to create automated user',
         success: false
       });
     }
@@ -1110,97 +1164,197 @@ return results;`;
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
             <h2 className="text-xl font-bold mb-4">Create New Test User</h2>
-            
+
             {userCreationStatus.error && (
               <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-lg text-red-700">
                 {userCreationStatus.error}
               </div>
             )}
-            
+
             {userCreationStatus.success && (
               <div className="mb-4 p-3 bg-green-50 border border-green-200 rounded-lg text-green-700">
                 User created successfully!
               </div>
             )}
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Username
-              </label>
-              <input
-                type="text"
-                value={newUser.username}
-                onChange={(e) => setNewUser(prev => ({ ...prev, username: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter username"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Email
-              </label>
-              <input
-                type="email"
-                value={newUser.email}
-                onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter email"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Password
-              </label>
-              <input
-                type="password"
-                value={newUser.password}
-                onChange={handlePasswordChange}
-                className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                placeholder="Enter password"
-              />
-            </div>
-            
-            <div className="mb-4">
-              <label className="block text-sm font-medium text-gray-700 mb-1">
-                Confirm Password
-              </label>
-              <input
-                type="password"
-                value={newUser.confirmPassword}
-                onChange={handleConfirmPasswordChange}
-                className={`w-full px-3 py-2 border ${
-                  !passwordsMatch ? 'border-red-500' : 'border-gray-300'
-                } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
-                placeholder="Confirm your password"
-              />
-              {!passwordsMatch && (
-                <p className="text-red-500 text-sm mt-1">
-                  Password and Confirm Password don't match
-                </p>
-              )}
-            </div>
-            
-            <div className="flex justify-end gap-3">
-              <button
-                onClick={() => {
-                  setShowUserModal(false);
-                  setUserCreationStatus({ loading: false, error: null, success: false });
-                  setNewUser({ username: '', email: '', password: '', confirmPassword: '' });
-                }}
-                className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={createUser}
-                disabled={userCreationStatus.loading || !passwordsMatch || !newUser.username || !newUser.email || !newUser.password || !newUser.confirmPassword}
-                className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300"
-              >
-                {userCreationStatus.loading ? 'Creating...' : 'Create User'}
-              </button>
-            </div>
+
+            {/* Choice Screen */}
+            {userCreationMode === 'choice' && (
+              <div className="space-y-4">
+                <p className="text-gray-600 mb-6">Choose how you want to create a test user:</p>
+
+                <button
+                  onClick={() => setUserCreationMode('manual')}
+                  className="w-full p-6 border-2 border-gray-200 rounded-lg hover:border-blue-500 hover:bg-blue-50 transition-all group"
+                >
+                  <div className="flex items-start gap-4">
+                    <UserPlus className="w-8 h-8 text-blue-600 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                    <div className="text-left">
+                      <h3 className="font-semibold text-gray-900 mb-1">Manual Creation</h3>
+                      <p className="text-sm text-gray-600">Enter username, email, and password manually</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => setUserCreationMode('automated')}
+                  className="w-full p-6 border-2 border-gray-200 rounded-lg hover:border-purple-500 hover:bg-purple-50 transition-all group"
+                >
+                  <div className="flex items-start gap-4">
+                    <Wand2 className="w-8 h-8 text-purple-600 flex-shrink-0 group-hover:scale-110 transition-transform" />
+                    <div className="text-left">
+                      <h3 className="font-semibold text-gray-900 mb-1">Automated Creation</h3>
+                      <p className="text-sm text-gray-600">Automatically generate a random Yelp user via Puppeteer</p>
+                    </div>
+                  </div>
+                </button>
+
+                <button
+                  onClick={() => {
+                    setShowUserModal(false);
+                    setUserCreationMode('choice');
+                    setUserCreationStatus({ loading: false, error: null, success: false });
+                  }}
+                  className="w-full px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 mt-4"
+                >
+                  Cancel
+                </button>
+              </div>
+            )}
+
+            {/* Manual Creation Form */}
+            {userCreationMode === 'manual' && (
+              <>
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Username
+                  </label>
+                  <input
+                    type="text"
+                    value={newUser.username}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, username: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter username"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Email
+                  </label>
+                  <input
+                    type="email"
+                    value={newUser.email}
+                    onChange={(e) => setNewUser(prev => ({ ...prev, email: e.target.value }))}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter email"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newUser.password}
+                    onChange={handlePasswordChange}
+                    className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent"
+                    placeholder="Enter password"
+                  />
+                </div>
+
+                <div className="mb-4">
+                  <label className="block text-sm font-medium text-gray-700 mb-1">
+                    Confirm Password
+                  </label>
+                  <input
+                    type="password"
+                    value={newUser.confirmPassword}
+                    onChange={handleConfirmPasswordChange}
+                    className={`w-full px-3 py-2 border ${
+                      !passwordsMatch ? 'border-red-500' : 'border-gray-300'
+                    } rounded-lg focus:ring-2 focus:ring-blue-500 focus:border-transparent`}
+                    placeholder="Confirm your password"
+                  />
+                  {!passwordsMatch && (
+                    <p className="text-red-500 text-sm mt-1">
+                      Password and Confirm Password don't match
+                    </p>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setUserCreationMode('choice');
+                      setUserCreationStatus({ loading: false, error: null, success: false });
+                      setNewUser({ username: '', email: '', password: '', confirmPassword: '' });
+                    }}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={createUser}
+                    disabled={userCreationStatus.loading || !passwordsMatch || !newUser.username || !newUser.email || !newUser.password || !newUser.confirmPassword}
+                    className="px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700 disabled:bg-blue-300"
+                  >
+                    {userCreationStatus.loading ? 'Creating...' : 'Create User'}
+                  </button>
+                </div>
+              </>
+            )}
+
+            {/* Automated Creation Screen */}
+            {userCreationMode === 'automated' && (
+              <>
+                <div className="mb-6 text-center py-8">
+                  {userCreationStatus.loading ? (
+                    <>
+                      <Wand2 className="w-16 h-16 text-purple-600 mx-auto mb-4 animate-spin" />
+                      <p className="text-gray-700 font-medium mb-2">Creating automated user...</p>
+                      <p className="text-sm text-gray-500">This may take a few minutes. Please wait for captcha resolution.</p>
+                    </>
+                  ) : (
+                    <>
+                      <Wand2 className="w-16 h-16 text-purple-600 mx-auto mb-4" />
+                      <p className="text-gray-700 font-medium mb-2">Ready to create automated user</p>
+                      <p className="text-sm text-gray-500">A browser will open to automatically register a new Yelp user.</p>
+                    </>
+                  )}
+                </div>
+
+                <div className="flex justify-end gap-3">
+                  <button
+                    onClick={() => {
+                      setUserCreationMode('choice');
+                      setUserCreationStatus({ loading: false, error: null, success: false });
+                    }}
+                    disabled={userCreationStatus.loading}
+                    className="px-4 py-2 border border-gray-300 text-gray-700 rounded-lg hover:bg-gray-50 disabled:opacity-50"
+                  >
+                    Back
+                  </button>
+                  <button
+                    onClick={createAutomatedUser}
+                    disabled={userCreationStatus.loading}
+                    className="px-4 py-2 bg-purple-600 text-white rounded-lg hover:bg-purple-700 disabled:bg-purple-300 flex items-center gap-2"
+                  >
+                    {userCreationStatus.loading ? (
+                      <>
+                        <Wand2 className="w-5 h-5 animate-spin" />
+                        Creating...
+                      </>
+                    ) : (
+                      <>
+                        <Wand2 className="w-5 h-5" />
+                        Start Automation
+                      </>
+                    )}
+                  </button>
+                </div>
+              </>
+            )}
           </div>
         </div>
       )}
