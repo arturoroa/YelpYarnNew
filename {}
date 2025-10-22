@@ -1,0 +1,24 @@
+[1] [eval]:1
+[1] setTimeout(()=,10000)
+[1]             ^
+[1] Parenthesized expression cannot be empty
+[1] 
+[1] SyntaxError: Unexpected token ')'
+[1]     at makeContextifyScript (node:internal/vm:185:14)
+[1]     at compileScript (node:internal/process/execution:383:10)
+[1]     at evalTypeScript (node:internal/process/execution:256:22)
+[1]     at node:internal/main/eval_string:74:3
+[1] 
+[1] Node.js v22.18.0
+[1] node -e "setTimeout(()=,10000)" && npm run dev:minimal-backend exited with code 1
+[0] 
+[0] > yelp-click-testing-app@1.0.0 dev:frontend
+[0] > vite
+[0] 
+[0] 
+[0]   [32m[1mVITE[22m v7.1.7[39m  [2mready in [0m[1m1293[22m[2m[0m ms[22m
+[0] 
+[0]   [32m➜[39m  [1mLocal[22m:   [36mhttp://localhost:[1m5173[22m/[39m
+[0] [2m  [32m➜[39m  [1mNetwork[22m[2m: use [22m[1m--host[22m[2m to expose[22m
+[0] �Desea terminar el trabajo por lotes (S/N)? 
+[0] npm run dev:frontend exited with code 1
