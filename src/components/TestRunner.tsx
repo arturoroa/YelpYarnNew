@@ -178,7 +178,11 @@ const TEST_SCENARIOS: TestScenario[] = [
   }
 ];
 
-const TestRunner: React.FC = () => {
+interface TestRunnerProps {
+  onViewUserDetails?: (userInfo: {guv: string, username: string, email: string}) => void;
+}
+
+const TestRunner: React.FC<TestRunnerProps> = ({ onViewUserDetails }) => {
   const [selectedUser, setSelectedUser] = useState<GuvUser | null>(null);
   const [users, setUsers] = useState<GuvUser[]>([]);
   const [showUserModal, setShowUserModal] = useState(false);
@@ -927,6 +931,9 @@ return results;`;
                 <div>
                   <h3 className="font-medium">{selectedUser.username}</h3>
                   <p className="text-sm text-gray-600">GUV: {selectedUser.guv}</p>
+                  {selectedUser.email && (
+                    <p className="text-sm text-gray-600">Email: {selectedUser.email}</p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-3">
@@ -934,6 +941,19 @@ return results;`;
                   {getStatusIcon(selectedUser.status)}
                   <span className="text-sm ml-1 capitalize">{selectedUser.status}</span>
                 </div>
+                {onViewUserDetails && (
+                  <button
+                    onClick={() => onViewUserDetails({
+                      guv: selectedUser.guv,
+                      username: selectedUser.username,
+                      email: selectedUser.email || ''
+                    })}
+                    className="flex items-center px-3 py-1 bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+                  >
+                    <AlertCircle className="w-4 h-4 mr-1" />
+                    See Details
+                  </button>
+                )}
                 <button
                   onClick={logoutUser}
                   className="flex items-center px-3 py-1 bg-gray-100 text-gray-800 rounded hover:bg-gray-200 transition-colors"

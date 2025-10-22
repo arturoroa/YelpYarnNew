@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { FileText, RefreshCw, Download, Filter, Search, Eye, Calendar, User, Target } from 'lucide-react';
+import { FileText, RefreshCw, Download, Filter, Search, Eye, Calendar, User, Target, X } from 'lucide-react';
 import { apiGet } from '../lib/http';
 
 interface TestLog {
@@ -30,7 +30,12 @@ interface TestSession {
   test_scenarios: string;
 }
 
-export default function TestLogs() {
+interface TestLogsProps {
+  selectedUser?: {guv: string, username: string, email: string} | null;
+  onClearFilter?: () => void;
+}
+
+export default function TestLogs({ selectedUser, onClearFilter }: TestLogsProps) {
   const [logs, setLogs] = useState<TestLog[]>([]);
   const [sessions, setSessions] = useState<TestSession[]>([]);
   const [loading, setLoading] = useState(false);
@@ -159,21 +164,23 @@ export default function TestLogs() {
   };
 
   const filteredLogs = logs.filter(log => {
-    const matchesFilter = filter === 'all' || 
+    const matchesFilter = filter === 'all' ||
       (filter === 'success' && log.success) ||
       (filter === 'failed' && !log.success) ||
       (filter === 'filtered' && log.filter_triggered) ||
       (filter === 'billable' && log.click_recorded);
-    
-    const matchesSearch = searchTerm === '' || 
+
+    const matchesSearch = searchTerm === '' ||
       log.scenario.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.action.toLowerCase().includes(searchTerm.toLowerCase()) ||
       log.details.toLowerCase().includes(searchTerm.toLowerCase()) ||
       (log.business_name && log.business_name.toLowerCase().includes(searchTerm.toLowerCase()));
-    
+
     const matchesSession = selectedSession === 'all' || log.session_id === selectedSession;
-    
-    return matchesFilter && matchesSearch && matchesSession;
+
+    const matchesUser = !selectedUser || log.guv === selectedUser.guv;
+
+    return matchesFilter && matchesSearch && matchesSession && matchesUser;
   });
 
   const logCounts = logs.reduce((acc, log) => {
@@ -258,6 +265,40 @@ export default function TestLogs() {
           </button>
         </div>
       </div>
+
+      {/* User Filter Banner */}
+      {selectedUser && (
+        <div className="bg-blue-50 border border-blue-200 rounded-lg p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <User className="w-5 h-5 text-blue-600" />
+            <div>
+              <p className="font-medium text-gray-900">Viewing logs for user:</p>
+              <div className="flex items-center gap-4 mt-1">
+                <span className="text-sm text-gray-700">
+                  <span className="font-medium">Username:</span> {selectedUser.username}
+                </span>
+                {selectedUser.email && (
+                  <span className="text-sm text-gray-700">
+                    <span className="font-medium">Email:</span> {selectedUser.email}
+                  </span>
+                )}
+                <span className="text-sm text-gray-700">
+                  <span className="font-medium">GUV:</span> {selectedUser.guv}
+                </span>
+              </div>
+            </div>
+          </div>
+          {onClearFilter && (
+            <button
+              onClick={onClearFilter}
+              className="flex items-center gap-2 px-3 py-1.5 text-sm bg-white border border-blue-300 text-blue-700 rounded-lg hover:bg-blue-100 transition-colors"
+            >
+              <X className="w-4 h-4" />
+              Clear Filter
+            </button>
+          )}
+        </div>
+      )}
 
       {/* Stats Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-5 gap-6">

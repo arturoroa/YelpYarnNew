@@ -72,6 +72,7 @@ const AppContent: React.FC = () => {
   const [selectedEnvironment, setSelectedEnvironment] = useState<any>(null);
   const { isAuthenticated, user } = useAuth();
   const [selectedSessionId, setSelectedSessionId] = useState<string | null>(null);
+  const [selectedUserForDetails, setSelectedUserForDetails] = useState<{guv: string, username: string, email: string} | null>(null);
 
   // Reset to dashboard when user changes (login/logout)
   React.useEffect(() => {
@@ -82,6 +83,12 @@ const AppContent: React.FC = () => {
   const handleViewSession = (sessionId: string) => {
     setSelectedSessionId(sessionId);
     setActiveView('session-viewer');
+  };
+
+  // Función para ver detalles de usuario en TestLogs
+  const handleViewUserDetails = (userInfo: {guv: string, username: string, email: string}) => {
+    setSelectedUserForDetails(userInfo);
+    setActiveView('test-logs');
   };
 
   // Determinar qué vista mostrar según activeView
@@ -95,11 +102,11 @@ const AppContent: React.FC = () => {
       case 'users':
         return <Users />;
       case 'test-runner':
-        return <TestRunner />;
+        return <TestRunner onViewUserDetails={handleViewUserDetails} />;
       case 'session-viewer':
         return <SessionViewer />;
       case 'test-logs':
-        return <TestLogs />;
+        return <TestLogs selectedUser={selectedUserForDetails} onClearFilter={() => setSelectedUserForDetails(null)} />;
       case 'system-logs':
         return <SystemLogs />;
       case 'integrations':
