@@ -1908,6 +1908,26 @@ app.get('/api/user-creation-logs/user/:userId', async (req, res) => {
   }
 });
 
+// Verify consistency between log file and database
+app.get('/api/user-logs/verify', async (req, res) => {
+  try {
+    const { verifyUserLogsConsistency, getDetailedReport } = await import('./utils/verifyUserLogs.js');
+    const verification = verifyUserLogsConsistency();
+    const report = getDetailedReport();
+
+    res.json({
+      ...verification,
+      detailedReport: report
+    });
+  } catch (error) {
+    console.error('Error verifying user logs:', error);
+    res.status(500).json({
+      error: 'Failed to verify user logs',
+      message: error.message
+    });
+  }
+});
+
 // Migrate data from defaultRecorder.db to active integration
 app.post('/api/integrations/:id/migrate', async (req, res) => {
   try {
