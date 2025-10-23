@@ -1728,14 +1728,23 @@ app.post('/api/users/create-automated', async (req, res) => {
     const result = await bot.runSignupFlow();
 
     if (result.success && result.data) {
-      let username = result.data.email.split('@')[0];
-      let existingUser = appDb.getUserByUsername(username);
-      let counter = 1;
+      const username = result.data.email.split('@')[0];
 
-      while (existingUser) {
-        username = `${result.data.email.split('@')[0]}_${counter}`;
-        existingUser = appDb.getUserByUsername(username);
-        counter++;
+      const existingUserByUsername = appDb.getUserByUsername(username);
+      if (existingUserByUsername) {
+        return res.status(409).json({
+          success: false,
+          error: `User with username "${username}" already exists. Please use a different email.`
+        });
+      }
+
+      const existingUsers = appDb.getAllUsers();
+      const existingUserByEmail = existingUsers.find(u => u.email === result.data.email);
+      if (existingUserByEmail) {
+        return res.status(409).json({
+          success: false,
+          error: `User with email "${result.data.email}" already exists.`
+        });
       }
 
       const userData = {
@@ -1877,14 +1886,23 @@ app.post('/api/users/create-with-data', async (req, res) => {
     const result = await bot.runSignupFlowWithData(userData);
 
     if (result.success && result.data) {
-      let username = result.data.email.split('@')[0];
-      let existingUser = appDb.getUserByUsername(username);
-      let counter = 1;
+      const username = result.data.email.split('@')[0];
 
-      while (existingUser) {
-        username = `${result.data.email.split('@')[0]}_${counter}`;
-        existingUser = appDb.getUserByUsername(username);
-        counter++;
+      const existingUserByUsername = appDb.getUserByUsername(username);
+      if (existingUserByUsername) {
+        return res.status(409).json({
+          success: false,
+          error: `User with username "${username}" already exists. Please use a different email.`
+        });
+      }
+
+      const existingUsers = appDb.getAllUsers();
+      const existingUserByEmail = existingUsers.find(u => u.email === result.data.email);
+      if (existingUserByEmail) {
+        return res.status(409).json({
+          success: false,
+          error: `User with email "${result.data.email}" already exists.`
+        });
       }
 
       const userDbData = {
