@@ -85,7 +85,7 @@ export default class YelpSignupAutomation {
       });
 
       // Wait a bit for page to fully load
-      await this.page.waitForTimeout(1000);
+      await new Promise(resolve => setTimeout(resolve, 1000));
 
       console.log('Waiting for first_name field...');
       await this.page.waitForSelector('input[name="first_name"]', { timeout: 10000 });
