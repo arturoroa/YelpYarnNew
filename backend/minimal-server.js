@@ -1713,19 +1713,92 @@ app.delete('/api/users/:userId', async (req, res) => {
   }
 });
 
-// Automated Yelp user creation endpoint
-app.post('/api/users/create-automated', async (req, res) => {
-  try {
-    console.log('Starting automated Yelp user creation...');
+// Helper function to run Python bot
+async function runPythonBot(mode, userData = null, headless = false, timeout = 30) {
+  return new Promise((resolve, reject) => {
+    const { spawn } = require('child_process');
+    const path = require('path');
 
-    const { default: YelpSignupAutomation } = await import('./services/YelpSignupAutomation.js');
+    const scriptPath = path.join(__dirname, 'automation', 'yelp_signup_bot.py');
+    const args = ['--mode', mode];
 
-    const bot = new YelpSignupAutomation({
-      headless: req.body.headless !== false,
-      timeout: req.body.timeout || 30000
+    if (headless) args.push('--headless');
+    args.push('--timeout', timeout.toString());
+
+    if (mode === 'manual' && userData) {
+      args.push('--data', JSON.stringify(userData));
+    }
+
+    console.log('Running Python bot:', 'python3', scriptPath, args.join(' '));
+
+    const pythonProcess = spawn('python3', [scriptPath, ...args]);
+
+    let stdout = '';
+    let stderr = '';
+    let resultJson = '';
+    let inResultBlock = false;
+
+    pythonProcess.stdout.on('data', (data) => {
+      const text = data.toString();
+      console.log('[Python]', text);
+      stdout += text;
+
+      // Capture JSON result
+      if (text.includes('=== RESULT ===')) {
+        inResultBlock = true;
+      } else if (inResultBlock) {
+        resultJson += text;
+      }
     });
 
-    const result = await bot.runSignupFlow();
+    pythonProcess.stderr.on('data', (data) => {
+      const text = data.toString();
+      console.error('[Python Error]', text);
+      stderr += text;
+    });
+
+    pythonProcess.on('close', (code) => {
+      console.log(`Python process exited with code ${code}`);
+
+      try {
+        // Try to parse the JSON result
+        if (resultJson.trim()) {
+          const result = JSON.parse(resultJson.trim());
+          resolve(result);
+        } else if (stdout.includes('{')) {
+          // Fallback: try to parse any JSON from stdout
+          const jsonMatch = stdout.match(/\{[\s\S]*\}/);
+          if (jsonMatch) {
+            const result = JSON.parse(jsonMatch[0]);
+            resolve(result);
+          } else {
+            reject(new Error('No valid JSON result from Python script'));
+          }
+        } else {
+          reject(new Error(`Python script failed: ${stderr || 'Unknown error'}`));
+        }
+      } catch (parseError) {
+        console.error('Failed to parse Python output:', parseError);
+        reject(new Error(`Failed to parse Python output: ${parseError.message}`));
+      }
+    });
+
+    pythonProcess.on('error', (error) => {
+      console.error('Failed to start Python process:', error);
+      reject(new Error(`Failed to start Python process: ${error.message}`));
+    });
+  });
+}
+
+// Automated Yelp user creation endpoint (uses Python)
+app.post('/api/users/create-automated', async (req, res) => {
+  try {
+    console.log('Starting automated Yelp user creation with Python...');
+
+    const headless = req.body.headless !== false;
+    const timeout = req.body.timeout || 30;
+
+    const result = await runPythonBot('automatic', null, headless, timeout);
 
     if (result.success && result.data) {
       const username = result.data.email.split('@')[0];
@@ -1791,13 +1864,13 @@ app.post('/api/users/create-automated', async (req, res) => {
         last_time: result.data.last_time
       });
 
-      activeBrowsers.set(user.id, bot);
+      // Note: Python bot runs independently, no browser handle stored
 
       res.json({
         success: true,
         user: user,
         automation_data: result.data,
-        browser_active: true
+        browser_active: false
       });
     } else {
       const failureLogData = {
@@ -1855,7 +1928,7 @@ app.post('/api/users/create-automated', async (req, res) => {
 
 app.post('/api/users/create-with-data', async (req, res) => {
   try {
-    console.log('Starting manual user creation with provided data...');
+    console.log('Starting manual user creation with provided data using Python...');
 
     const { firstName, lastName, email, password, zipCode, birthday, headless, timeout } = req.body;
 
@@ -1866,24 +1939,16 @@ app.post('/api/users/create-with-data', async (req, res) => {
       });
     }
 
-    const { default: YelpSignupAutomation } = await import('./services/YelpSignupAutomation.js');
-
-    const bot = new YelpSignupAutomation({
-      headless: headless !== false,
-      timeout: timeout || 30000
-    });
-
     const userData = {
       firstName,
       lastName,
       email,
       password,
       zipCode,
-      birthday,
-      init_time: Date.now()
+      birthday
     };
 
-    const result = await bot.runSignupFlowWithData(userData);
+    const result = await runPythonBot('manual', userData, headless !== false, timeout || 30);
 
     if (result.success && result.data) {
       const username = result.data.email.split('@')[0];
@@ -1949,13 +2014,13 @@ app.post('/api/users/create-with-data', async (req, res) => {
         last_time: result.data.last_time
       });
 
-      activeBrowsers.set(user.id, bot);
+      // Note: Python bot runs independently, no browser handle stored
 
       res.json({
         success: true,
         user: user,
         automation_data: result.data,
-        browser_active: true
+        browser_active: false
       });
     } else {
       const failureLogData = {
