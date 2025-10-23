@@ -87,52 +87,75 @@ export default class YelpSignupAutomation {
       // Wait a bit for page to fully load
       await new Promise(resolve => setTimeout(resolve, 1000));
 
-      console.log('Waiting for first_name field...');
-      await this.page.waitForSelector('input[name="first_name"]', { timeout: 10000 });
-      const firstNameField = await this.page.$('input[name="first_name"]');
-      await firstNameField.click({ clickCount: 3 });
-      await firstNameField.type(userData.firstName, { delay: 50 });
-      const fn = await firstNameField.evaluate(el => el.value);
-      console.log('✓ Filled first_name:', fn);
+      console.log('=== Detecting form fields on page ===');
 
-      console.log('Waiting for last_name field...');
-      await this.page.waitForSelector('input[name="last_name"]', { timeout: 10000 });
-      const lastNameField = await this.page.$('input[name="last_name"]');
-      await lastNameField.click({ clickCount: 3 });
-      await lastNameField.type(userData.lastName, { delay: 50 });
-      const ln = await lastNameField.evaluate(el => el.value);
-      console.log('✓ Filled last_name:', ln);
+      // Detect all input fields and their names
+      const fieldInfo = await this.page.evaluate(() => {
+        const inputs = Array.from(document.querySelectorAll('input'));
+        const selects = Array.from(document.querySelectorAll('select'));
+        return {
+          inputs: inputs.map(el => ({
+            name: el.name,
+            type: el.type,
+            id: el.id,
+            placeholder: el.placeholder
+          })),
+          selects: selects.map(el => ({
+            name: el.name,
+            id: el.id
+          }))
+        };
+      });
 
-      console.log('Waiting for email field...');
-      await this.page.waitForSelector('input[name="email"]', { timeout: 10000 });
-      const emailField = await this.page.$('input[name="email"]');
-      await emailField.click({ clickCount: 3 });
-      await emailField.type(userData.email, { delay: 50 });
-      const em = await emailField.evaluate(el => el.value);
-      console.log('✓ Filled email:', em);
+      console.log('Found input fields:', JSON.stringify(fieldInfo.inputs, null, 2));
+      console.log('Found select fields:', JSON.stringify(fieldInfo.selects, null, 2));
 
-      console.log('Waiting for password field...');
-      await this.page.waitForSelector('input[name="password"]', { timeout: 10000 });
-      const passwordField = await this.page.$('input[name="password"]');
-      await passwordField.click({ clickCount: 3 });
-      await passwordField.type(userData.password, { delay: 50 });
-      console.log('✓ Filled password (hidden)');
+      // Helper function to fill a field robustly
+      const fillField = async (selector, value, fieldName) => {
+        console.log(`Filling ${fieldName}...`);
+        await this.page.waitForSelector(selector, { timeout: 10000 });
 
-      console.log('Waiting for zip_code field...');
-      await this.page.waitForSelector('input[name="zip_code"]', { timeout: 10000 });
-      const zipField = await this.page.$('input[name="zip_code"]');
-      await zipField.click({ clickCount: 3 });
-      await zipField.type(userData.zipCode, { delay: 50 });
-      const zp = await zipField.evaluate(el => el.value);
-      console.log('✓ Filled zip_code:', zp);
+        // Focus and clear the field
+        await this.page.evaluate((sel) => {
+          const field = document.querySelector(sel);
+          if (field) {
+            field.focus();
+            field.value = '';
+          }
+        }, selector);
 
-      console.log('Waiting for birthday fields...');
+        await new Promise(resolve => setTimeout(resolve, 100));
+
+        // Type the value
+        await this.page.type(selector, value, { delay: 50 });
+
+        // Verify the value
+        const actualValue = await this.page.evaluate((sel) => {
+          return document.querySelector(sel)?.value || '';
+        }, selector);
+
+        console.log(`✓ ${fieldName}: "${actualValue}"`);
+        return actualValue;
+      };
+
+      // Fill fields in order
+      await fillField('input[name="first_name"]', userData.firstName, 'First Name');
+      await fillField('input[name="last_name"]', userData.lastName, 'Last Name');
+      await fillField('input[name="email"]', userData.email, 'Email');
+      await fillField('input[name="password"]', userData.password, 'Password');
+      await fillField('input[name="zip_code"]', userData.zipCode, 'ZIP Code');
+
+      // Fill birthday dropdowns
+      console.log('Filling birthday fields...');
       await this.page.waitForSelector('select[name="birthday_month"]', { timeout: 10000 });
       const [month, day, year] = userData.birthday.split('/');
+
       await this.page.select('select[name="birthday_month"]', month);
       console.log('✓ Selected month:', month);
+
       await this.page.select('select[name="birthday_day"]', day);
       console.log('✓ Selected day:', day);
+
       await this.page.select('select[name="birthday_year"]', year);
       console.log('✓ Selected year:', year);
 
