@@ -1718,6 +1718,7 @@ async function runPythonBot(mode, userData = null, headless = false, timeout = 3
   return new Promise((resolve, reject) => {
     const { spawn } = require('child_process');
     const path = require('path');
+    const os = require('os');
 
     const scriptPath = path.join(__dirname, 'automation', 'yelp_signup_bot.py');
     const args = ['--mode', mode];
@@ -1729,9 +1730,13 @@ async function runPythonBot(mode, userData = null, headless = false, timeout = 3
       args.push('--data', JSON.stringify(userData));
     }
 
-    console.log('Running Python bot:', 'python3', scriptPath, args.join(' '));
+    // Detect platform and use appropriate Python command
+    const isWindows = os.platform() === 'win32';
+    const pythonCmd = isWindows ? 'python' : 'python3';
 
-    const pythonProcess = spawn('python3', [scriptPath, ...args]);
+    console.log(`Running Python bot (${os.platform()}):`, pythonCmd, scriptPath, args.join(' '));
+
+    const pythonProcess = spawn(pythonCmd, [scriptPath, ...args]);
 
     let stdout = '';
     let stderr = '';
@@ -1762,12 +1767,18 @@ async function runPythonBot(mode, userData = null, headless = false, timeout = 3
 
       // Check for selenium module error
       if (stderr.includes('ModuleNotFoundError') && stderr.includes('selenium')) {
+        const isWindows = os.platform() === 'win32';
+        const installCmd = isWindows ? 'pip install selenium' : 'pip3 install selenium';
+        const chromeDriverInfo = isWindows
+          ? 'Download from https://chromedriver.chromium.org/ and place in backend\\automation\\'
+          : 'brew install chromedriver (macOS) or apt-get install chromium-chromedriver (Linux)';
+
         reject(new Error(
-          'Python selenium module not installed. Please run: pip3 install selenium\n\n' +
+          `Python selenium module not installed. Please run: ${installCmd}\n\n` +
           'Setup instructions:\n' +
-          '1. Install selenium: pip3 install selenium\n' +
-          '2. Install ChromeDriver: brew install chromedriver (macOS) or apt-get install chromium-chromedriver (Linux)\n' +
-          '3. Or run: ./setup_python_bot.sh'
+          `1. Install selenium: ${installCmd}\n` +
+          `2. Install ChromeDriver: ${chromeDriverInfo}\n` +
+          '3. Restart the server after installation'
         ));
         return;
       }
