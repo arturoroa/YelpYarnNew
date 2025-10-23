@@ -84,80 +84,116 @@ export default class YelpSignupAutomation {
         timeout: this.timeout
       });
 
-      // Wait a bit for page to fully load
-      await new Promise(resolve => setTimeout(resolve, 1000));
+      // Wait for page to fully load
+      await new Promise(resolve => setTimeout(resolve, 1500));
 
-      console.log('=== Detecting form fields on page ===');
+      console.log('=== Detecting form type (Modal vs Direct) ===');
 
-      // Detect all input fields and their names
-      const fieldInfo = await this.page.evaluate(() => {
-        const inputs = Array.from(document.querySelectorAll('input'));
-        const selects = Array.from(document.querySelectorAll('select'));
+      // Check which scenario we're in
+      const formType = await this.page.evaluate(() => {
+        const hasDirectForm = document.querySelector('#first_name') !== null;
+        const hasModalForm = document.querySelector("input[placeholder='First Name']") !== null;
         return {
-          inputs: inputs.map(el => ({
-            name: el.name,
-            type: el.type,
-            id: el.id,
-            placeholder: el.placeholder
-          })),
-          selects: selects.map(el => ({
-            name: el.name,
-            id: el.id
-          }))
+          isDirect: hasDirectForm,
+          isModal: hasModalForm,
+          type: hasDirectForm ? 'DIRECT' : (hasModalForm ? 'MODAL' : 'UNKNOWN')
         };
       });
 
-      console.log('Found input fields:', JSON.stringify(fieldInfo.inputs, null, 2));
-      console.log('Found select fields:', JSON.stringify(fieldInfo.selects, null, 2));
+      console.log('Form type detected:', formType.type);
 
-      // Helper function to fill a field robustly
-      const fillField = async (selector, value, fieldName) => {
-        console.log(`Filling ${fieldName}...`);
-        await this.page.waitForSelector(selector, { timeout: 10000 });
+      // Helper function to fill a field with multiple selector attempts
+      const fillField = async (selectors, value, fieldName) => {
+        console.log(`Filling ${fieldName} with value: "${value}"`);
 
-        // Focus and clear the field
-        await this.page.evaluate((sel) => {
-          const field = document.querySelector(sel);
-          if (field) {
-            field.focus();
-            field.value = '';
+        for (const selector of selectors) {
+          try {
+            await this.page.waitForSelector(selector, { timeout: 3000 });
+
+            // Clear and fill
+            await this.page.evaluate((sel) => {
+              const field = document.querySelector(sel);
+              if (field) {
+                field.focus();
+                field.value = '';
+              }
+            }, selector);
+
+            await new Promise(resolve => setTimeout(resolve, 100));
+            await this.page.type(selector, value, { delay: 50 });
+
+            // Verify
+            const actualValue = await this.page.evaluate((sel) => {
+              return document.querySelector(sel)?.value || '';
+            }, selector);
+
+            console.log(`✓ ${fieldName}: "${actualValue}" (using ${selector})`);
+            return actualValue;
+          } catch (err) {
+            console.log(`  ⚠ Selector "${selector}" not found, trying next...`);
           }
-        }, selector);
+        }
 
-        await new Promise(resolve => setTimeout(resolve, 100));
-
-        // Type the value
-        await this.page.type(selector, value, { delay: 50 });
-
-        // Verify the value
-        const actualValue = await this.page.evaluate((sel) => {
-          return document.querySelector(sel)?.value || '';
-        }, selector);
-
-        console.log(`✓ ${fieldName}: "${actualValue}"`);
-        return actualValue;
+        throw new Error(`Could not fill ${fieldName} - no valid selector found`);
       };
 
-      // Fill fields in order
-      await fillField('input[name="first_name"]', userData.firstName, 'First Name');
-      await fillField('input[name="last_name"]', userData.lastName, 'Last Name');
-      await fillField('input[name="email"]', userData.email, 'Email');
-      await fillField('input[name="password"]', userData.password, 'Password');
-      await fillField('input[name="zip_code"]', userData.zipCode, 'ZIP Code');
+      // Define selectors for both scenarios (Direct form first, then Modal, then fallback)
+      const selectors = {
+        firstName: [
+          '#first_name',
+          "input[placeholder='First Name']",
+          'input[name="first_name"]'
+        ],
+        lastName: [
+          '#last_name',
+          "input[placeholder='Last Name']",
+          'input[name="last_name"]'
+        ],
+        email: [
+          '#email',
+          "input[type='email'][placeholder='Email']",
+          'input[name="email"]'
+        ],
+        password: [
+          '#password',
+          "input[type='password'][placeholder='Password']",
+          'input[name="password"]'
+        ],
+        zipCode: [
+          '#zip',
+          "input[name='zip'][placeholder='ZIP Code']",
+          'input[name="zip_code"]'
+        ]
+      };
 
-      // Fill birthday dropdowns
-      console.log('Filling birthday fields...');
-      await this.page.waitForSelector('select[name="birthday_month"]', { timeout: 10000 });
-      const [month, day, year] = userData.birthday.split('/');
+      // Fill all fields
+      await fillField(selectors.firstName, userData.firstName, 'First Name');
+      await fillField(selectors.lastName, userData.lastName, 'Last Name');
+      await fillField(selectors.email, userData.email, 'Email');
+      await fillField(selectors.password, userData.password, 'Password');
+      await fillField(selectors.zipCode, userData.zipCode, 'ZIP Code');
 
-      await this.page.select('select[name="birthday_month"]', month);
-      console.log('✓ Selected month:', month);
+      // Handle birthday - check if dropdowns exist
+      console.log('Checking for birthday fields...');
+      const hasBirthdayDropdowns = await this.page.evaluate(() => {
+        return document.querySelector('select[name="birthday_month"]') !== null;
+      });
 
-      await this.page.select('select[name="birthday_day"]', day);
-      console.log('✓ Selected day:', day);
+      if (hasBirthdayDropdowns) {
+        console.log('Filling birthday dropdowns...');
+        const [month, day, year] = userData.birthday.split('/');
 
-      await this.page.select('select[name="birthday_year"]', year);
-      console.log('✓ Selected year:', year);
+        await this.page.select('select[name="birthday_month"]', month);
+        console.log('✓ Selected month:', month);
+
+        await this.page.select('select[name="birthday_day"]', day);
+        console.log('✓ Selected day:', day);
+
+        await this.page.select('select[name="birthday_year"]', year);
+        console.log('✓ Selected year:', year);
+      } else {
+        console.log('⚠ No birthday dropdowns found (may not be required in this form)');
+      }
 
       console.log('=== All fields filled! Check the browser to verify. ===');
       console.log('Note: Submit button NOT clicked - manual review required');
