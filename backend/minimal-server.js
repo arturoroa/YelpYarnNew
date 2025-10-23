@@ -1728,8 +1728,18 @@ app.post('/api/users/create-automated', async (req, res) => {
     const result = await bot.runSignupFlow();
 
     if (result.success && result.data) {
+      let username = result.data.email.split('@')[0];
+      let existingUser = appDb.getUserByUsername(username);
+      let counter = 1;
+
+      while (existingUser) {
+        username = `${result.data.email.split('@')[0]}_${counter}`;
+        existingUser = appDb.getUserByUsername(username);
+        counter++;
+      }
+
       const userData = {
-        username: result.data.email.split('@')[0],
+        username: username,
         password: result.data.password,
         email: result.data.email,
         type_of_user: 'TestUser',
@@ -1867,8 +1877,18 @@ app.post('/api/users/create-with-data', async (req, res) => {
     const result = await bot.runSignupFlowWithData(userData);
 
     if (result.success && result.data) {
+      let username = result.data.email.split('@')[0];
+      let existingUser = appDb.getUserByUsername(username);
+      let counter = 1;
+
+      while (existingUser) {
+        username = `${result.data.email.split('@')[0]}_${counter}`;
+        existingUser = appDb.getUserByUsername(username);
+        counter++;
+      }
+
       const userDbData = {
-        username: result.data.email.split('@')[0],
+        username: username,
         password: result.data.password,
         email: result.data.email,
         type_of_user: 'TestUser',
