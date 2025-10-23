@@ -19,11 +19,18 @@ export default function Users() {
   const [editingId, setEditingId] = useState<string | null>(null);
   const [isCreatingAutomated, setIsCreatingAutomated] = useState(false);
   const [formData, setFormData] = useState({
+    firstName: '',
+    lastName: '',
+    email: '',
+    password: '',
+    zipCode: '',
+    birthday: ''
+  });
+  const [editFormData, setEditFormData] = useState({
     username: '',
     password: '',
     email: '',
-    type_of_user: 'TestUser' as 'SystemUser' | 'RegularUser' | 'TestUser',
-    created_by: ''
+    type_of_user: 'TestUser' as 'SystemUser' | 'RegularUser' | 'TestUser'
   });
   const [toasts, setToasts] = useState<Array<{ id: number; message: string; type: 'success' | 'error' | 'info' }>>([]);
 
@@ -66,36 +73,45 @@ export default function Users() {
   };
 
   const handleCreateUser = async () => {
-    if (!formData.username || !formData.password) {
-      showToast('Username and password are required', 'error');
+    if (!formData.firstName || !formData.lastName || !formData.email || !formData.password || !formData.zipCode || !formData.birthday) {
+      showToast('All fields are required', 'error');
       return;
     }
 
-    try {
-      const currentUser = JSON.parse(localStorage.getItem('user') || '{}');
-      const dataToSend = {
-        ...formData,
-        created_by: currentUser.username || 'system'
-      };
+    setIsCreatingAutomated(true);
+    showToast('Creating user with bot automation... This may take a few minutes.', 'info');
 
-      const response = await fetch('/api/users', {
+    try {
+      const response = await fetch('/api/users/create-with-data', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(dataToSend)
+        body: JSON.stringify({
+          firstName: formData.firstName,
+          lastName: formData.lastName,
+          email: formData.email,
+          password: formData.password,
+          zipCode: formData.zipCode,
+          birthday: formData.birthday,
+          headless: false,
+          timeout: 30000
+        })
       });
 
-      if (!response.ok) {
-        const error = await response.json();
-        throw new Error(error.error || 'Failed to create user');
-      }
+      const result = await response.json();
 
-      await fetchUsers();
-      setShowAddForm(false);
-      setFormData({ username: '', password: '', email: '', type_of_user: 'TestUser', created_by: '' });
-      showToast('User created successfully', 'success');
+      if (response.ok && result.success) {
+        showToast(`User created successfully: ${result.user.email}`, 'success');
+        await fetchUsers();
+        setShowAddForm(false);
+        setFormData({ firstName: '', lastName: '', email: '', password: '', zipCode: '', birthday: '' });
+      } else {
+        showToast(result.error || 'Failed to create user', 'error');
+      }
     } catch (error) {
       console.error('Error creating user:', error);
       showToast(error instanceof Error ? error.message : 'Failed to create user', 'error');
+    } finally {
+      setIsCreatingAutomated(false);
     }
   };
 
@@ -104,7 +120,7 @@ export default function Users() {
       const response = await fetch(`/api/users/${id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(formData)
+        body: JSON.stringify(editFormData)
       });
 
       if (!response.ok) {
@@ -114,7 +130,7 @@ export default function Users() {
 
       await fetchUsers();
       setEditingId(null);
-      setFormData({ username: '', password: '', email: '', type_of_user: 'TestUser', created_by: '' });
+      setEditFormData({ username: '', password: '', email: '', type_of_user: 'TestUser' });
       showToast('User updated successfully', 'success');
     } catch (error) {
       console.error('Error updating user:', error);
@@ -147,18 +163,17 @@ export default function Users() {
 
   const startEdit = (user: User) => {
     setEditingId(user.id);
-    setFormData({
+    setEditFormData({
       username: user.username,
       password: '',
       email: user.email || '',
-      type_of_user: user.type_of_user,
-      created_by: user.created_by || ''
+      type_of_user: user.type_of_user
     });
   };
 
   const cancelEdit = () => {
     setEditingId(null);
-    setFormData({ username: '', password: '', email: '', type_of_user: 'TestUser', created_by: '' });
+    setEditFormData({ username: '', password: '', email: '', type_of_user: 'TestUser' });
   };
 
   const handleCreateAutomatedUser = async () => {
@@ -243,18 +258,43 @@ export default function Users() {
       {showAddForm && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white rounded-lg p-6 w-full max-w-md">
-            <h2 className="text-xl font-bold mb-4">Add New User</h2>
-            <div className="space-y-4">
+            <h2 className="text-xl font-bold mb-2">Create Yelp User with Bot</h2>
+            <p className="text-sm text-gray-600 mb-4">Fill in the details and the bot will create this user on Yelp automatically</p>
+            <div className="space-y-4 max-h-96 overflow-y-auto">
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Username *
+                  First Name *
                 </label>
                 <input
                   type="text"
-                  value={formData.username}
-                  onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                  value={formData.firstName}
+                  onChange={(e) => setFormData({ ...formData, firstName: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter username"
+                  placeholder="Enter first name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Last Name *
+                </label>
+                <input
+                  type="text"
+                  value={formData.lastName}
+                  onChange={(e) => setFormData({ ...formData, lastName: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter last name"
+                />
+              </div>
+              <div>
+                <label className="block text-sm font-medium text-gray-700 mb-1">
+                  Email *
+                </label>
+                <input
+                  type="email"
+                  value={formData.email}
+                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
+                  placeholder="Enter email"
                 />
               </div>
               <div>
@@ -271,44 +311,44 @@ export default function Users() {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  Email
+                  ZIP Code *
                 </label>
                 <input
-                  type="email"
-                  value={formData.email}
-                  onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                  type="text"
+                  value={formData.zipCode}
+                  onChange={(e) => setFormData({ ...formData, zipCode: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                  placeholder="Enter email"
+                  placeholder="Enter ZIP code (e.g., 10001)"
                 />
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-700 mb-1">
-                  User Type *
+                  Birthday *
                 </label>
-                <select
-                  value={formData.type_of_user}
-                  onChange={(e) => setFormData({ ...formData, type_of_user: e.target.value as any })}
+                <input
+                  type="text"
+                  value={formData.birthday}
+                  onChange={(e) => setFormData({ ...formData, birthday: e.target.value })}
                   className="w-full px-3 py-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-blue-500"
-                >
-                  <option value="SystemUser">System User (can create users)</option>
-                  <option value="RegularUser">Regular User (Users tab hidden)</option>
-                  <option value="TestUser">Test User (cannot login)</option>
-                </select>
+                  placeholder="MM/DD/YYYY (e.g., 05/15/1990)"
+                />
               </div>
             </div>
             <div className="flex gap-3 mt-6">
               <button
                 onClick={handleCreateUser}
-                className="flex-1 px-4 py-2 bg-blue-600 text-white rounded-lg hover:bg-blue-700"
+                disabled={isCreatingAutomated}
+                className={`flex-1 px-4 py-2 ${isCreatingAutomated ? 'bg-blue-400' : 'bg-blue-600 hover:bg-blue-700'} text-white rounded-lg transition-colors`}
               >
-                Create User
+                {isCreatingAutomated ? 'Creating...' : 'Create User with Bot'}
               </button>
               <button
                 onClick={() => {
                   setShowAddForm(false);
-                  setFormData({ username: '', password: '', email: '', type_of_user: 'TestUser', created_by: '' });
+                  setFormData({ firstName: '', lastName: '', email: '', password: '', zipCode: '', birthday: '' });
                 }}
-                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300"
+                disabled={isCreatingAutomated}
+                className="flex-1 px-4 py-2 bg-gray-200 text-gray-800 rounded-lg hover:bg-gray-300 disabled:opacity-50"
               >
                 Cancel
               </button>
@@ -345,8 +385,8 @@ export default function Users() {
                   {editingId === user.id ? (
                     <input
                       type="text"
-                      value={formData.username}
-                      onChange={(e) => setFormData({ ...formData, username: e.target.value })}
+                      value={editFormData.username}
+                      onChange={(e) => setEditFormData({ ...editFormData, username: e.target.value })}
                       className="px-2 py-1 border border-gray-300 rounded"
                     />
                   ) : (
@@ -357,8 +397,8 @@ export default function Users() {
                   {editingId === user.id ? (
                     <input
                       type="email"
-                      value={formData.email}
-                      onChange={(e) => setFormData({ ...formData, email: e.target.value })}
+                      value={editFormData.email}
+                      onChange={(e) => setEditFormData({ ...editFormData, email: e.target.value })}
                       className="px-2 py-1 border border-gray-300 rounded"
                     />
                   ) : (
@@ -368,8 +408,8 @@ export default function Users() {
                 <td className="px-6 py-4 whitespace-nowrap">
                   {editingId === user.id ? (
                     <select
-                      value={formData.type_of_user}
-                      onChange={(e) => setFormData({ ...formData, type_of_user: e.target.value as any })}
+                      value={editFormData.type_of_user}
+                      onChange={(e) => setEditFormData({ ...editFormData, type_of_user: e.target.value as any })}
                       className="px-2 py-1 border border-gray-300 rounded"
                     >
                       <option value="SystemUser">System User</option>

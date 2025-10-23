@@ -88,6 +88,68 @@ class YelpSignupAutomation {
     };
   }
 
+  async runSignupFlowWithData(userData) {
+    try {
+      await this.initialize();
+      userData.init_time = userData.init_time || Date.now();
+
+      console.log('Using provided user data:', {
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName
+      });
+
+      await this.page.goto('https://www.yelp.com/signup', {
+        waitUntil: 'networkidle2',
+        timeout: this.timeout
+      });
+
+      await this.page.waitForSelector('input[name="first_name"]', { timeout: 5000 });
+      await this.page.type('input[name="first_name"]', userData.firstName, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="last_name"]', { timeout: 5000 });
+      await this.page.type('input[name="last_name"]', userData.lastName, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="email"]', { timeout: 5000 });
+      await this.page.type('input[name="email"]', userData.email, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="password"]', { timeout: 5000 });
+      await this.page.type('input[name="password"]', userData.password, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="zip_code"]', { timeout: 5000 });
+      await this.page.type('input[name="zip_code"]', userData.zipCode, { delay: 50 });
+
+      await this.page.waitForSelector('select[name="birthday_month"]', { timeout: 5000 });
+      const [month, day, year] = userData.birthday.split('/');
+      await this.page.select('select[name="birthday_month"]', month);
+      await this.page.select('select[name="birthday_day"]', day);
+      await this.page.select('select[name="birthday_year"]', year);
+
+      const submitButton = await this.page.$('button[type="submit"]');
+      if (submitButton) {
+        await submitButton.click();
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
+      }
+
+      const lastTime = Date.now();
+      userData.last_time = lastTime;
+
+      return {
+        success: true,
+        data: userData
+      };
+    } catch (error) {
+      console.error('Error during signup automation with data:', error);
+      const lastTime = Date.now();
+
+      return {
+        success: false,
+        error: error.message,
+        data: userData ? { ...userData, last_time: lastTime } : null
+      };
+    }
+  }
+
   async runSignupFlow() {
     const initTime = Date.now();
     let userData = null;

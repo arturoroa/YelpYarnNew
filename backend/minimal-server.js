@@ -1834,6 +1834,146 @@ app.post('/api/users/create-automated', async (req, res) => {
   }
 });
 
+app.post('/api/users/create-with-data', async (req, res) => {
+  try {
+    console.log('Starting manual user creation with provided data...');
+
+    const { firstName, lastName, email, password, zipCode, birthday, headless, timeout } = req.body;
+
+    if (!firstName || !lastName || !email || !password || !zipCode || !birthday) {
+      return res.status(400).json({
+        success: false,
+        error: 'All fields are required: firstName, lastName, email, password, zipCode, birthday'
+      });
+    }
+
+    const { default: YelpSignupAutomation } = await import('./services/YelpSignupAutomation.js');
+
+    const bot = new YelpSignupAutomation({
+      headless: headless !== false,
+      timeout: timeout || 30000
+    });
+
+    const userData = {
+      firstName,
+      lastName,
+      email,
+      password,
+      zipCode,
+      birthday,
+      init_time: Date.now()
+    };
+
+    const result = await bot.runSignupFlowWithData(userData);
+
+    if (result.success && result.data) {
+      const userDbData = {
+        username: result.data.email.split('@')[0],
+        password: result.data.password,
+        email: result.data.email,
+        type_of_user: 'TestUser',
+        created_by: 'manual'
+      };
+
+      const user = appDb.createUser(userDbData);
+
+      const creationLogData = {
+        user_id: user.id,
+        username: user.username,
+        email: result.data.email,
+        password: result.data.password,
+        first_name: result.data.firstName || null,
+        last_name: result.data.lastName || null,
+        zip_code: result.data.zipCode || null,
+        birth_date: result.data.birthday || null,
+        creation_method: 'manual',
+        created_by: 'manual',
+        ip_address: req.ip || req.connection.remoteAddress,
+        user_agent: req.headers['user-agent'],
+        automation_data: {
+          init_time: result.data.init_time,
+          last_time: result.data.last_time,
+          duration: result.data.last_time - result.data.init_time
+        },
+        status: 'success'
+      };
+
+      if (appDb.logUserCreation) {
+        appDb.logUserCreation(creationLogData);
+      }
+
+      logUserCreationToFile(creationLogData);
+
+      await logSystemAction('manual', 'manual_user_created', {
+        user_id: user.id,
+        email: result.data.email,
+        init_time: result.data.init_time,
+        last_time: result.data.last_time
+      });
+
+      activeBrowsers.set(user.id, bot);
+
+      res.json({
+        success: true,
+        user: user,
+        automation_data: result.data,
+        browser_active: true
+      });
+    } else {
+      const failureLogData = {
+        user_id: 'failed',
+        username: email.split('@')[0] || 'unknown',
+        email: email || null,
+        password: password || null,
+        first_name: firstName || null,
+        last_name: lastName || null,
+        zip_code: zipCode || null,
+        birth_date: birthday || null,
+        creation_method: 'manual',
+        created_by: 'manual',
+        ip_address: req.ip || req.connection.remoteAddress,
+        user_agent: req.headers['user-agent'],
+        automation_data: result.data || null,
+        status: 'failed',
+        error_message: result.error || 'Failed to create user with bot'
+      };
+
+      logUserCreationToFile(failureLogData);
+
+      res.status(500).json({
+        success: false,
+        error: result.error || 'Failed to create user with bot',
+        partial_data: result.data
+      });
+    }
+  } catch (error) {
+    console.error('Error in manual user creation with data:', error);
+
+    const failureLogData = {
+      user_id: 'failed',
+      username: req.body.email?.split('@')[0] || 'unknown',
+      email: req.body.email || null,
+      creation_method: 'manual',
+      created_by: 'manual',
+      ip_address: req.ip || req.connection.remoteAddress,
+      user_agent: req.headers['user-agent'],
+      status: 'failed',
+      error_message: error.message
+    };
+
+    logUserCreationToFile(failureLogData);
+
+    await logSystemAction('manual', 'manual_user_creation_failed', {
+      error: error.message
+    });
+
+    res.status(500).json({
+      success: false,
+      error: error.message
+    });
+  }
+});
+
 app.get('/api/users/:userId/browser-status', (req, res) => {
   const userId = parseInt(req.params.userId);
   const hasBrowser = activeBrowsers.has(userId);
