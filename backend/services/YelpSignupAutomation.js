@@ -1,0 +1,211 @@
+import puppeteer from 'puppeteer';
+import fs from 'fs';
+import path from 'path';
+import { fileURLToPath } from 'url';
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+
+export default class YelpSignupAutomation {
+  constructor(options = {}) {
+    this.headless = options.headless !== false;
+    this.timeout = options.timeout || 30000;
+    this.browser = null;
+    this.page = null;
+  }
+
+  async initialize() {
+    this.browser = await puppeteer.launch({
+      headless: this.headless,
+      args: ['--no-sandbox', '--disable-setuid-sandbox']
+    });
+    this.page = await this.browser.newPage();
+    await this.page.setViewport({ width: 1280, height: 800 });
+  }
+
+  getRandomElement(array) {
+    return array[Math.floor(Math.random() * array.length)];
+  }
+
+  readDataFile(filename) {
+    const filePath = path.join(__dirname, '../data', filename);
+    const content = fs.readFileSync(filePath, 'utf-8');
+    return content.split('\n').filter(line => line.trim());
+  }
+
+  generateUserData() {
+    const firstNames = this.readDataFile('names.txt');
+    const lastNames = this.readDataFile('lastname.txt');
+    const mailProviders = this.readDataFile('mailproviders.txt');
+    const zipCodes = this.readDataFile('uszip.txt');
+
+    const firstName = this.getRandomElement(firstNames);
+    const lastName = this.getRandomElement(lastNames);
+    const mailProvider = this.getRandomElement(mailProviders);
+    const zipCode = this.getRandomElement(zipCodes);
+
+    const email = `${firstName.toLowerCase()}.${lastName.toLowerCase()}${Math.floor(Math.random() * 1000)}@${mailProvider}`;
+    const password = `Pass${Math.floor(Math.random() * 10000)}!`;
+
+    const currentYear = new Date().getFullYear();
+    const minAge = 18;
+    const maxAge = 65;
+    const birthYear = currentYear - minAge - Math.floor(Math.random() * (maxAge - minAge));
+    const birthMonth = String(Math.floor(Math.random() * 12) + 1).padStart(2, '0');
+    const birthDay = String(Math.floor(Math.random() * 28) + 1).padStart(2, '0');
+    const birthday = `${birthMonth}/${birthDay}/${birthYear}`;
+
+    return {
+      firstName,
+      lastName,
+      email,
+      password,
+      zipCode,
+      birthday,
+      init_time: Date.now()
+    };
+  }
+
+  async runSignupFlowWithData(userData) {
+    try {
+      await this.initialize();
+      userData.init_time = userData.init_time || Date.now();
+
+      console.log('Using provided user data:', {
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName
+      });
+
+      await this.page.goto('https://www.yelp.com/signup', {
+        waitUntil: 'networkidle2',
+        timeout: this.timeout
+      });
+
+      await this.page.waitForSelector('input[name="first_name"]', { timeout: 5000 });
+      await this.page.type('input[name="first_name"]', userData.firstName, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="last_name"]', { timeout: 5000 });
+      await this.page.type('input[name="last_name"]', userData.lastName, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="email"]', { timeout: 5000 });
+      await this.page.type('input[name="email"]', userData.email, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="password"]', { timeout: 5000 });
+      await this.page.type('input[name="password"]', userData.password, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="zip_code"]', { timeout: 5000 });
+      await this.page.type('input[name="zip_code"]', userData.zipCode, { delay: 50 });
+
+      await this.page.waitForSelector('select[name="birthday_month"]', { timeout: 5000 });
+      const [month, day, year] = userData.birthday.split('/');
+      await this.page.select('select[name="birthday_month"]', month);
+      await this.page.select('select[name="birthday_day"]', day);
+      await this.page.select('select[name="birthday_year"]', year);
+
+      const submitButton = await this.page.$('button[type="submit"]');
+      if (submitButton) {
+        await submitButton.click();
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
+      }
+
+      const lastTime = Date.now();
+      userData.last_time = lastTime;
+
+      return {
+        success: true,
+        data: userData
+      };
+    } catch (error) {
+      console.error('Error during signup automation with data:', error);
+      const lastTime = Date.now();
+
+      return {
+        success: false,
+        error: error.message,
+        data: userData ? { ...userData, last_time: lastTime } : null
+      };
+    }
+  }
+
+  async runSignupFlow() {
+    const initTime = Date.now();
+    let userData = null;
+
+    try {
+      await this.initialize();
+      userData = this.generateUserData();
+
+      console.log('Generated user data:', {
+        email: userData.email,
+        firstName: userData.firstName,
+        lastName: userData.lastName
+      });
+
+      await this.page.goto('https://www.yelp.com/signup', {
+        waitUntil: 'networkidle2',
+        timeout: this.timeout
+      });
+
+      await this.page.waitForSelector('input[name="first_name"]', { timeout: 5000 });
+      await this.page.type('input[name="first_name"]', userData.firstName, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="last_name"]', { timeout: 5000 });
+      await this.page.type('input[name="last_name"]', userData.lastName, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="email"]', { timeout: 5000 });
+      await this.page.type('input[name="email"]', userData.email, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="password"]', { timeout: 5000 });
+      await this.page.type('input[name="password"]', userData.password, { delay: 50 });
+
+      await this.page.waitForSelector('input[name="zip_code"]', { timeout: 5000 });
+      await this.page.type('input[name="zip_code"]', userData.zipCode, { delay: 50 });
+
+      await this.page.waitForSelector('select[name="birthday_month"]', { timeout: 5000 });
+      const [month, day, year] = userData.birthday.split('/');
+      await this.page.select('select[name="birthday_month"]', month);
+      await this.page.select('select[name="birthday_day"]', day);
+      await this.page.select('select[name="birthday_year"]', year);
+
+      const submitButton = await this.page.$('button[type="submit"]');
+      if (submitButton) {
+        await submitButton.click();
+        await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
+      }
+
+      const lastTime = Date.now();
+      userData.last_time = lastTime;
+
+      return {
+        success: true,
+        data: userData
+      };
+    } catch (error) {
+      console.error('Error during signup automation:', error);
+      const lastTime = Date.now();
+
+      return {
+        success: false,
+        error: error.message,
+        data: userData ? { ...userData, last_time: lastTime } : null
+      };
+    }
+  }
+
+  async closeBrowser() {
+    if (this.browser) {
+      await this.browser.close();
+      this.browser = null;
+      this.page = null;
+    }
+  }
+
+  getBrowser() {
+    return this.browser;
+  }
+
+  getPage() {
+    return this.page;
+  }
+}
