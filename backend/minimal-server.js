@@ -1760,6 +1760,18 @@ async function runPythonBot(mode, userData = null, headless = false, timeout = 3
     pythonProcess.on('close', (code) => {
       console.log(`Python process exited with code ${code}`);
 
+      // Check for selenium module error
+      if (stderr.includes('ModuleNotFoundError') && stderr.includes('selenium')) {
+        reject(new Error(
+          'Python selenium module not installed. Please run: pip3 install selenium\n\n' +
+          'Setup instructions:\n' +
+          '1. Install selenium: pip3 install selenium\n' +
+          '2. Install ChromeDriver: brew install chromedriver (macOS) or apt-get install chromium-chromedriver (Linux)\n' +
+          '3. Or run: ./setup_python_bot.sh'
+        ));
+        return;
+      }
+
       try {
         // Try to parse the JSON result
         if (resultJson.trim()) {

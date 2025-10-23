@@ -18,18 +18,29 @@ The Yelp signup automation now uses **Python with Selenium** instead of JavaScri
 
 ### 1. Install Python Dependencies
 
-Run the setup script:
+**Windows:**
+```cmd
+setup_python_bot.bat
+```
+
+**macOS/Linux:**
 ```bash
 ./setup_python_bot.sh
 ```
 
-Or manually:
+**Manual installation:**
 ```bash
 cd backend/automation
-pip3 install -r requirements.txt
+pip install -r requirements.txt
 ```
 
 ### 2. Install ChromeDriver
+
+**Windows:**
+1. Download ChromeDriver from: https://chromedriver.chromium.org/
+2. Match your Chrome browser version
+3. Extract `chromedriver.exe`
+4. Add to PATH or place in `backend/automation/` folder
 
 **macOS:**
 ```bash
@@ -41,20 +52,21 @@ brew install chromedriver
 sudo apt-get install chromium-chromedriver
 ```
 
-**Windows:**
-- Download from: https://chromedriver.chromium.org/
-- Add to PATH
-
 ### 3. Test the Bot
 
-**Automatic mode:**
+**Windows:**
+```cmd
+python backend\automation\yelp_signup_bot.py --mode automatic
+```
+
+**macOS/Linux:**
 ```bash
 python3 backend/automation/yelp_signup_bot.py --mode automatic
 ```
 
-**Manual mode:**
+**Manual mode test:**
 ```bash
-python3 backend/automation/yelp_signup_bot.py --mode manual --data '{"firstName":"John","lastName":"Smith","email":"john@example.com","password":"Pass123!","zipCode":"10001","birthday":"01/15/1990"}'
+python backend/automation/yelp_signup_bot.py --mode manual --data "{\"firstName\":\"John\",\"lastName\":\"Smith\",\"email\":\"john@example.com\",\"password\":\"Pass123!\",\"zipCode\":\"10001\",\"birthday\":\"01/15/1990\"}"
 ```
 
 ## How It Works
@@ -110,25 +122,57 @@ backend/
 
 ## Troubleshooting
 
-### Python not found
-```bash
-# Install Python 3
-sudo apt-get install python3 python3-pip
+### Error: "Python selenium module not installed"
+
+**Windows:**
+```cmd
+pip install selenium
 ```
 
-### Selenium not found
+**macOS/Linux:**
 ```bash
 pip3 install selenium
 ```
 
-### ChromeDriver not found
-- Make sure ChromeDriver is in your PATH
-- Version must match your Chrome browser version
+Or run the setup script: `setup_python_bot.bat` (Windows) or `./setup_python_bot.sh` (macOS/Linux)
+
+### Python not found
+
+**Windows:**
+- Install from: https://www.python.org/downloads/
+- Make sure "Add Python to PATH" is checked during installation
+
+**macOS/Linux:**
+```bash
+# macOS
+brew install python3
+
+# Ubuntu/Debian
+sudo apt-get install python3 python3-pip
+```
+
+### ChromeDriver not found or version mismatch
+
+**Check your Chrome version:**
+- Open Chrome → Settings → About Chrome
+- Note the version number (e.g., 120.0.6099.109)
+
+**Download matching ChromeDriver:**
+- Visit: https://chromedriver.chromium.org/downloads
+- Download the version that matches your Chrome browser
+- Extract and add to PATH
+
+**Windows:** Place `chromedriver.exe` in `backend/automation/` folder or add to PATH
+
+**macOS:** `brew install chromedriver` (automatically matches version)
+
+**Linux:** `sudo apt-get install chromium-chromedriver`
 
 ### Form fields not filling
 - Check server console for Python output
 - Look for "Form type detected: DIRECT" or "MODAL"
 - Verify all fields show "✓ Field Name: value"
+- Run without `--headless` to see the browser: remove headless flag in UI
 
 ## Advantages of Python Bot
 
