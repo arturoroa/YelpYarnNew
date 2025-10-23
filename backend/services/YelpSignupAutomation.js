@@ -86,36 +86,41 @@ export default class YelpSignupAutomation {
 
       console.log('Waiting for first_name field...');
       await this.page.waitForSelector('input[name="first_name"]', { timeout: 5000 });
-      await this.page.click('input[name="first_name"]', { clickCount: 3 });
-      await this.page.keyboard.press('Backspace');
+      await this.page.evaluate(() => {
+        document.querySelector('input[name="first_name"]').value = '';
+      });
       await this.page.type('input[name="first_name"]', userData.firstName, { delay: 50 });
       console.log('✓ Filled first_name:', userData.firstName);
 
       console.log('Waiting for last_name field...');
       await this.page.waitForSelector('input[name="last_name"]', { timeout: 5000 });
-      await this.page.click('input[name="last_name"]', { clickCount: 3 });
-      await this.page.keyboard.press('Backspace');
+      await this.page.evaluate(() => {
+        document.querySelector('input[name="last_name"]').value = '';
+      });
       await this.page.type('input[name="last_name"]', userData.lastName, { delay: 50 });
       console.log('✓ Filled last_name:', userData.lastName);
 
       console.log('Waiting for email field...');
       await this.page.waitForSelector('input[name="email"]', { timeout: 5000 });
-      await this.page.click('input[name="email"]', { clickCount: 3 });
-      await this.page.keyboard.press('Backspace');
+      await this.page.evaluate(() => {
+        document.querySelector('input[name="email"]').value = '';
+      });
       await this.page.type('input[name="email"]', userData.email, { delay: 50 });
       console.log('✓ Filled email:', userData.email);
 
       console.log('Waiting for password field...');
       await this.page.waitForSelector('input[name="password"]', { timeout: 5000 });
-      await this.page.click('input[name="password"]', { clickCount: 3 });
-      await this.page.keyboard.press('Backspace');
+      await this.page.evaluate(() => {
+        document.querySelector('input[name="password"]').value = '';
+      });
       await this.page.type('input[name="password"]', userData.password, { delay: 50 });
       console.log('✓ Filled password');
 
       console.log('Waiting for zip_code field...');
       await this.page.waitForSelector('input[name="zip_code"]', { timeout: 5000 });
-      await this.page.click('input[name="zip_code"]', { clickCount: 3 });
-      await this.page.keyboard.press('Backspace');
+      await this.page.evaluate(() => {
+        document.querySelector('input[name="zip_code"]').value = '';
+      });
       await this.page.type('input[name="zip_code"]', userData.zipCode, { delay: 50 });
       console.log('✓ Filled zip_code:', userData.zipCode);
 
