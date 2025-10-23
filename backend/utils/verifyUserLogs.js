@@ -10,7 +10,7 @@ const projectRoot = join(__dirname, '../..');
 const require = createRequire(join(projectRoot, 'package.json'));
 const Database = require('better-sqlite3');
 
-const LOG_FILE = join(projectRoot, 'UserCreationLog.log');
+const LOG_FILE = join(projectRoot, 'backend', 'data', 'UserCreationLog.log');
 const DB_FILE = join(projectRoot, 'defaultRecorder.db');
 
 export function verifyUserLogsConsistency() {

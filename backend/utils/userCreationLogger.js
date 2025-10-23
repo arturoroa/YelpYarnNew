@@ -6,7 +6,7 @@ const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
 const projectRoot = join(__dirname, '../..');
 
-const LOG_FILE = join(projectRoot, 'UserCreationLog.log');
+const LOG_FILE = join(projectRoot, 'backend', 'data', 'UserCreationLog.log');
 
 export function logUserCreationToFile(data) {
   try {

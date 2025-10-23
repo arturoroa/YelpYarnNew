@@ -1603,6 +1603,11 @@ app.post('/api/users', async (req, res) => {
       return res.status(400).json({ error: 'Username and password are required' });
     }
 
+    const existingUser = appDb.getUserByUsername(userData.username);
+    if (existingUser) {
+      return res.status(409).json({ error: 'User with this username already exists' });
+    }
+
     if (!userData.type_of_user) {
       userData.type_of_user = 'TestUser';
     }
@@ -1661,7 +1666,7 @@ app.post('/api/users', async (req, res) => {
       error: error.message
     });
 
-    res.status(500).json({ error: 'Failed to create user' });
+    res.status(500).json({ error: error.message || 'Failed to create user' });
   }
 });
 
