@@ -71,40 +71,68 @@ export default class YelpSignupAutomation {
       await this.initialize();
       userData.init_time = userData.init_time || Date.now();
 
-      console.log('Using provided user data:', {
-        email: userData.email,
-        firstName: userData.firstName,
-        lastName: userData.lastName
-      });
+      console.log('=== Starting Yelp Signup with User Data ===');
+      console.log('First Name:', userData.firstName);
+      console.log('Last Name:', userData.lastName);
+      console.log('Email:', userData.email);
+      console.log('Password:', userData.password);
+      console.log('ZIP Code:', userData.zipCode);
+      console.log('Birthday:', userData.birthday);
 
       await this.page.goto('https://www.yelp.com/signup', {
         waitUntil: 'networkidle2',
         timeout: this.timeout
       });
 
+      console.log('Waiting for first_name field...');
       await this.page.waitForSelector('input[name="first_name"]', { timeout: 5000 });
+      await this.page.click('input[name="first_name"]', { clickCount: 3 });
+      await this.page.keyboard.press('Backspace');
       await this.page.type('input[name="first_name"]', userData.firstName, { delay: 50 });
+      console.log('✓ Filled first_name:', userData.firstName);
 
+      console.log('Waiting for last_name field...');
       await this.page.waitForSelector('input[name="last_name"]', { timeout: 5000 });
+      await this.page.click('input[name="last_name"]', { clickCount: 3 });
+      await this.page.keyboard.press('Backspace');
       await this.page.type('input[name="last_name"]', userData.lastName, { delay: 50 });
+      console.log('✓ Filled last_name:', userData.lastName);
 
+      console.log('Waiting for email field...');
       await this.page.waitForSelector('input[name="email"]', { timeout: 5000 });
+      await this.page.click('input[name="email"]', { clickCount: 3 });
+      await this.page.keyboard.press('Backspace');
       await this.page.type('input[name="email"]', userData.email, { delay: 50 });
+      console.log('✓ Filled email:', userData.email);
 
+      console.log('Waiting for password field...');
       await this.page.waitForSelector('input[name="password"]', { timeout: 5000 });
+      await this.page.click('input[name="password"]', { clickCount: 3 });
+      await this.page.keyboard.press('Backspace');
       await this.page.type('input[name="password"]', userData.password, { delay: 50 });
+      console.log('✓ Filled password');
 
+      console.log('Waiting for zip_code field...');
       await this.page.waitForSelector('input[name="zip_code"]', { timeout: 5000 });
+      await this.page.click('input[name="zip_code"]', { clickCount: 3 });
+      await this.page.keyboard.press('Backspace');
       await this.page.type('input[name="zip_code"]', userData.zipCode, { delay: 50 });
+      console.log('✓ Filled zip_code:', userData.zipCode);
 
+      console.log('Waiting for birthday fields...');
       await this.page.waitForSelector('select[name="birthday_month"]', { timeout: 5000 });
       const [month, day, year] = userData.birthday.split('/');
       await this.page.select('select[name="birthday_month"]', month);
+      console.log('✓ Selected month:', month);
       await this.page.select('select[name="birthday_day"]', day);
+      console.log('✓ Selected day:', day);
       await this.page.select('select[name="birthday_year"]', year);
+      console.log('✓ Selected year:', year);
 
+      console.log('Looking for submit button...');
       const submitButton = await this.page.$('button[type="submit"]');
       if (submitButton) {
+        console.log('Clicking submit button...');
         await submitButton.click();
         await this.page.waitForNavigation({ waitUntil: 'networkidle2', timeout: 10000 });
       }
@@ -112,12 +140,16 @@ export default class YelpSignupAutomation {
       const lastTime = Date.now();
       userData.last_time = lastTime;
 
+      console.log('=== Signup Completed Successfully ===');
+
       return {
         success: true,
         data: userData
       };
     } catch (error) {
-      console.error('Error during signup automation with data:', error);
+      console.error('=== Error during signup automation ===');
+      console.error('Error message:', error.message);
+      console.error('Stack trace:', error.stack);
       const lastTime = Date.now();
 
       return {
