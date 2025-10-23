@@ -215,15 +215,10 @@ class YelpSignupBot:
             print("=== All fields filled successfully! ===")
             print("Note: Submit button NOT clicked - manual review required")
 
-            # Keep browser open for manual review
+            # Keep browser open briefly for visual verification in non-headless mode
             if not self.headless:
-                print("\nBrowser will remain open for manual review.")
-                print("Press Ctrl+C to close when done.")
-                try:
-                    while True:
-                        time.sleep(1)
-                except KeyboardInterrupt:
-                    print("\nClosing browser...")
+                print("\n[Keeping browser open for 5 seconds for visual verification...]")
+                time.sleep(5)
 
             return {
                 'success': True,
@@ -248,10 +243,6 @@ class YelpSignupBot:
                     'last_time': last_time * 1000
                 }
             }
-
-        finally:
-            if self.headless and self.driver:
-                self.driver.quit()
 
     def close(self):
         """Close the browser"""
@@ -305,8 +296,8 @@ def main():
         }))
         sys.exit(1)
     finally:
-        if args.headless:
-            bot.close()
+        # Always close the browser when done
+        bot.close()
 
 
 if __name__ == '__main__':
