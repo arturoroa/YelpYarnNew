@@ -50,18 +50,28 @@ class YelpSignupBot:
 
     def initialize_driver(self):
         """Initialize Chrome WebDriver"""
+        print("Initializing Chrome WebDriver...")
         chrome_options = Options()
         if self.headless:
             chrome_options.add_argument('--headless')
+            print("Running in HEADLESS mode")
+        else:
+            print("Running in VISIBLE mode (browser will open)")
+
         chrome_options.add_argument('--no-sandbox')
         chrome_options.add_argument('--disable-dev-shm-usage')
         chrome_options.add_argument('--disable-blink-features=AutomationControlled')
         chrome_options.add_experimental_option("excludeSwitches", ["enable-automation"])
         chrome_options.add_experimental_option('useAutomationExtension', False)
 
-        self.driver = webdriver.Chrome(options=chrome_options)
-        self.driver.set_window_size(1280, 800)
-        self.wait = WebDriverWait(self.driver, self.timeout)
+        try:
+            self.driver = webdriver.Chrome(options=chrome_options)
+            self.driver.set_window_size(1280, 800)
+            self.wait = WebDriverWait(self.driver, self.timeout)
+            print(f"✓ WebDriver initialized successfully (timeout: {self.timeout}s)")
+        except Exception as e:
+            print(f"✗ Failed to initialize WebDriver: {str(e)}")
+            raise
 
     def load_data_file(self, filename):
         """Load data from text files"""
@@ -118,7 +128,7 @@ class YelpSignupBot:
 
     def fill_field(self, locator_type, locator, value, field_name):
         """Fill a form field with retry logic"""
-        print(f"Filling {field_name} with: {value}")
+        print(f"Filling {field_name} with: {value}", flush=True)
         try:
             if locator_type == 'css':
                 element = self.wait.until(EC.presence_of_element_located((By.CSS_SELECTOR, locator)))
@@ -130,10 +140,13 @@ class YelpSignupBot:
             element.send_keys(value)
 
             actual_value = element.get_attribute('value')
-            print(f"✓ {field_name}: {actual_value}")
+            print(f"✓ {field_name}: {actual_value}", flush=True)
             return True
+        except TimeoutException:
+            print(f"✗ Timeout waiting for {field_name} (locator: {locator})", flush=True)
+            return False
         except Exception as e:
-            print(f"✗ Failed to fill {field_name}: {str(e)}")
+            print(f"✗ Failed to fill {field_name}: {str(e)}", flush=True)
             return False
 
     def fill_birthday(self, birthday):
@@ -183,15 +196,20 @@ class YelpSignupBot:
             print(f"Birthday: {user_data['birthday']}")
 
             # Navigate to Yelp signup
+            print("\nNavigating to Yelp signup page...")
             self.driver.get('https://www.yelp.com/signup')
+            print("✓ Page loaded, waiting 2 seconds...")
             time.sleep(2)
 
             # Detect form type
+            print("\nDetecting form type...")
             form_type = self.detect_form_type()
-            print(f"Form type detected: {form_type}")
+            print(f"✓ Form type detected: {form_type}")
 
+            print("\nFilling form fields...")
             if form_type == 'DIRECT':
                 # Direct form scenario
+                print("Using DIRECT form selectors (CSS)")
                 self.fill_field('css', CSS_FIRST_NAME_DIRECT, user_data['firstName'], 'First Name')
                 self.fill_field('css', CSS_LAST_NAME_DIRECT, user_data['lastName'], 'Last Name')
                 self.fill_field('css', CSS_EMAIL_DIRECT, user_data['email'], 'Email')
@@ -201,6 +219,7 @@ class YelpSignupBot:
 
             elif form_type == 'MODAL':
                 # Modal form scenario
+                print("Using MODAL form selectors (XPath)")
                 self.fill_field('xpath', XPATH_FIRST_NAME_MODAL, user_data['firstName'], 'First Name')
                 self.fill_field('xpath', XPATH_LAST_NAME_MODAL, user_data['lastName'], 'Last Name')
                 self.fill_field('xpath', XPATH_EMAIL_MODAL, user_data['email'], 'Email')
@@ -262,6 +281,11 @@ def main():
     parser.add_argument('--timeout', type=int, default=30, help='Timeout in seconds')
 
     args = parser.parse_args()
+
+    print(f"\n{'='*50}", flush=True)
+    print(f"Yelp Signup Bot - Mode: {args.mode.upper()}", flush=True)
+    print(f"Headless: {args.headless}, Timeout: {args.timeout}s", flush=True)
+    print(f"{'='*50}\n", flush=True)
 
     bot = YelpSignupBot(headless=args.headless, timeout=args.timeout)
 
