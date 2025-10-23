@@ -1818,7 +1818,7 @@ app.post('/api/users/create-automated', async (req, res) => {
   try {
     console.log('Starting automated Yelp user creation with Python...');
 
-    const headless = req.body.headless !== false;
+    const headless = req.body.headless === true; // Only headless if explicitly requested
     const timeout = req.body.timeout || 30;
 
     const result = await runPythonBot('automatic', null, headless, timeout);
@@ -1971,7 +1971,7 @@ app.post('/api/users/create-with-data', async (req, res) => {
       birthday
     };
 
-    const result = await runPythonBot('manual', userData, headless !== false, timeout || 30);
+    const result = await runPythonBot('manual', userData, headless === true, timeout || 30);
 
     if (result.success && result.data) {
       const username = result.data.email.split('@')[0];

@@ -90,6 +90,7 @@ runPythonBot('manual', userData, headless, timeout)
 3. **Proper Field Filling** - Uses clear() + send_keys() for each field
 4. **Birthday Handling** - Fills dropdowns if present
 5. **JSON Output** - Returns structured JSON for the backend to parse
+6. **Visible Browser by Default** - Browser window is visible unless explicitly set to headless (great for debugging!)
 
 ### Selector Mapping
 
@@ -181,4 +182,5 @@ sudo apt-get install python3 python3-pip
 3. ✅ Properly fills **all fields** including lastName
 4. ✅ More mature Selenium ecosystem
 5. ✅ Easy to debug with console output
-6. ✅ Can run headless or visible for debugging
+6. ✅ **Browser visible by default** - See exactly what's happening in real-time!
+7. ✅ Windows support with automatic `python` vs `python3` detection
